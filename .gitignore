@@ -1,0 +1,38 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Ambientes Virtuales (NUNCA subir esto) ---
+venv/
+env/
+.env
+.venv
+
+# --- Jupyter Notebooks ---
+# Ignorar los autosalvados temporales
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# --- DATOS ---
+data/raw/*
+data/processed/*
+
+# ...pero mantenemos las carpetas vacías usando un archivo .gitkeep (ver truco abajo)
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# --- Archivos generados / Exports temporales ---
+*.csv
+*.xlsx
+*.xls
+*.json
+*.log
+*.sql
+
+# --- IDEs y Sistema Operativo ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
