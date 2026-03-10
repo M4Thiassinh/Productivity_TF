@@ -1,0 +1,323 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>&#128104;&#8205;&#128188; Planificacion Diaria</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 min-h-screen text-white p-4 md:p-8">
+
+  <header class="flex flex-wrap items-center gap-4 mb-6 max-w-6xl mx-auto">
+    <a href="/" class="flex items-center justify-center w-10 h-10 rounded-xl
+              bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white
+              transition-colors text-xl font-bold shrink-0">&#8592;</a>
+    <div class="flex-1 min-w-0">
+      <h1 class="text-3xl md:text-4xl font-black">&#128104;&#8205;&#128188; Planificacion Diaria</h1>
+      <p class="text-gray-500 text-sm mt-0.5" id="fecha-display"></p>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <label class="text-gray-500 text-xs font-semibold uppercase tracking-wider">Fecha</label>
+      <input type="date" id="input-fecha"
+             class="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2
+                    text-white text-sm focus:outline-none focus:border-blue-500 transition-colors" />
+    </div>
+  </header>
+
+  <div class="max-w-6xl mx-auto space-y-5">
+
+    <!-- INFO -->
+    <div class="bg-blue-950 border border-blue-800 rounded-2xl px-5 py-3 flex items-start gap-3">
+      <span class="text-lg shrink-0 mt-0.5">&#128161;</span>
+      <p class="text-blue-200 text-sm leading-relaxed">
+        Ingresa la cantidad de <strong class="text-white">Sala</strong>,
+        <strong class="text-white">Tienda</strong> y
+        <strong class="text-white">Marley</strong> para cada producto.
+        El <strong class="text-white">Total</strong> se calcula automaticamente.
+        Solo se guardaran filas con Total &gt; 0.
+      </p>
+    </div>
+
+    <!-- TABLA BATCH -->
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+      <!-- Cabecera -->
+      <div class="grid items-center px-4 py-3 bg-gray-800/50 border-b border-gray-700
+                  text-xs font-bold uppercase tracking-wider text-gray-500"
+           style="grid-template-columns: 2.5rem 5rem 1fr 6.5rem 6.5rem 6.5rem 5.5rem;">
+        <span></span>
+        <span>PLU</span>
+        <span>Producto</span>
+        <span class="text-center text-purple-400">&#127968; Sala</span>
+        <span class="text-center text-sky-400">&#127978; Tienda</span>
+        <span class="text-center text-amber-400">&#127381; Marley</span>
+        <span class="text-center text-green-400">Total</span>
+      </div>
+      <!-- Cuerpo -->
+      <div id="tabla-productos">
+        <div class="py-12 text-center text-gray-600 animate-pulse">&#9203; Cargando productos...</div>
+      </div>
+    </div>
+
+    <!-- RESUMEN -->
+    <div id="resumen-box" class="hidden bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4 flex flex-wrap gap-6 items-center">
+      <div>
+        <span class="text-gray-500 text-xs uppercase tracking-wider block">Productos planificados</span>
+        <span id="resumen-count" class="text-3xl font-black text-blue-400">0</span>
+      </div>
+      <div>
+        <span class="text-gray-500 text-xs uppercase tracking-wider block">Total Sala</span>
+        <span id="resumen-sala" class="text-3xl font-black text-purple-400">0</span>
+      </div>
+      <div>
+        <span class="text-gray-500 text-xs uppercase tracking-wider block">Total Tienda</span>
+        <span id="resumen-tienda" class="text-3xl font-black text-sky-400">0</span>
+      </div>
+      <div>
+        <span class="text-gray-500 text-xs uppercase tracking-wider block">Total Marley</span>
+        <span id="resumen-marley" class="text-3xl font-black text-amber-400">0</span>
+      </div>
+      <div>
+        <span class="text-gray-500 text-xs uppercase tracking-wider block">Total General</span>
+        <span id="resumen-total" class="text-3xl font-black text-green-400">0</span>
+      </div>
+    </div>
+
+    <!-- BOTON GUARDAR -->
+    <button id="btn-guardar" onclick="guardarBatch()" disabled
+            class="w-full bg-blue-800 text-gray-400 font-black py-5 rounded-2xl text-2xl
+                   transition-all tracking-widest cursor-not-allowed opacity-50 shadow-xl">
+      &#128190; GUARDAR PLANIFICACION DEL DIA
+    </button>
+    <div id="toast-guardar" class="hidden text-center py-3 px-5 rounded-xl font-semibold text-base"></div>
+
+    <!-- AGREGAR PRODUCTO (acordeon) -->
+    <details class="bg-gray-900 rounded-2xl border border-gray-800">
+      <summary class="px-6 py-4 cursor-pointer text-gray-500 hover:text-white font-semibold text-sm flex items-center gap-2 transition-colors">
+        &#9881;&#65039; Agregar producto nuevo al catalogo
+      </summary>
+      <div class="px-6 pb-6 pt-3 border-t border-gray-800">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <input type="text" id="np-plu" placeholder="PLU ID"
+                 class="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500" />
+          <input type="text" id="np-nombre" placeholder="Nombre del producto"
+                 class="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500" />
+          <select id="np-tipo"
+                  class="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500">
+            <option value="Caliente">&#128293; Caliente</option>
+            <option value="Frio">&#10052;&#65039; Frio</option>
+          </select>
+        </div>
+        <button onclick="agregarProducto()"
+                class="mt-3 bg-gray-700 hover:bg-gray-600 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-colors">
+          &#10133; Agregar al catalogo
+        </button>
+        <div id="toast-prod" class="hidden mt-2 text-sm font-semibold"></div>
+      </div>
+    </details>
+
+  </div>
+
+  <script>
+    const today = new Date().toISOString().slice(0, 10);
+    const fechaInput = document.getElementById('input-fecha');
+    fechaInput.value = today;
+
+    document.getElementById('fecha-display').textContent =
+      new Date().toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    fechaInput.addEventListener('change', () => cargarTabla(fechaInput.value));
+
+    function toast(id, msg, tipo) {
+      const el = document.getElementById(id);
+      const ok  = 'text-center py-3 px-5 rounded-xl font-semibold text-base bg-green-900 text-green-300 border border-green-700';
+      const err = 'text-center py-3 px-5 rounded-xl font-semibold text-base bg-red-900 text-red-300 border border-red-700';
+      el.className = tipo === 'ok' ? ok : err;
+      el.textContent = msg;
+      clearTimeout(el._t);
+      el._t = setTimeout(() => { el.className = 'hidden'; }, 4000);
+    }
+
+    function onInputChange() {
+      let count = 0, sumSala = 0, sumTienda = 0, sumMarley = 0;
+      document.querySelectorAll('[data-plu]').forEach(div => {
+        const plu     = div.dataset.plu;
+        const sala    = parseInt(document.getElementById('sala-'   + plu).value) || 0;
+        const tienda  = parseInt(document.getElementById('tienda-' + plu).value) || 0;
+        const marley  = parseInt(document.getElementById('marley-' + plu).value) || 0;
+        const total   = sala + tienda + marley;
+        const celda   = document.getElementById('total-' + plu);
+        if (celda) {
+          celda.textContent = total > 0 ? total : '\u2014';
+          celda.className   = total > 0
+            ? 'text-center font-black text-xl text-green-400'
+            : 'text-center text-gray-700 text-sm';
+        }
+        if (total > 0) { count++; sumSala += sala; sumTienda += tienda; sumMarley += marley; }
+      });
+
+      document.getElementById('resumen-count').textContent  = count;
+      document.getElementById('resumen-sala').textContent   = sumSala;
+      document.getElementById('resumen-tienda').textContent = sumTienda;
+      document.getElementById('resumen-marley').textContent = sumMarley;
+      document.getElementById('resumen-total').textContent  = sumSala + sumTienda + sumMarley;
+      document.getElementById('resumen-box').classList.toggle('hidden', count === 0);
+
+      const btn = document.getElementById('btn-guardar');
+      if (count > 0) {
+        btn.disabled  = false;
+        btn.className = 'w-full bg-blue-700 hover:bg-blue-600 active:bg-blue-800 text-white font-black py-5 rounded-2xl text-2xl transition-all tracking-widest cursor-pointer shadow-xl shadow-blue-900/40';
+      } else {
+        btn.disabled  = true;
+        btn.className = 'w-full bg-blue-800 text-gray-400 font-black py-5 rounded-2xl text-2xl transition-all tracking-widest cursor-not-allowed opacity-50 shadow-xl';
+      }
+    }
+
+    function renderTabla(productos, planExistente) {
+      const planMap = {};
+      planExistente.forEach(p => {
+        planMap[p.plu_id] = { sala: p.cant_sala || 0, tienda: p.cant_tienda || 0, marley: p.cant_marley || 0 };
+      });
+
+      const calientes = productos.filter(p => p.tipo_cuarto === 'Caliente');
+      const frios     = productos.filter(p => p.tipo_cuarto === 'Frio' || p.tipo_cuarto === 'Fr\u00edo');
+
+      const inputBase = 'w-full text-center bg-gray-800 border border-gray-700 rounded-xl px-1 py-2 text-white font-bold text-base focus:outline-none transition-colors';
+
+      function filas(lista) {
+        return lista.map(p => {
+          const prev  = planMap[p.plu_id] || { sala: 0, tienda: 0, marley: 0 };
+          const total = prev.sala + prev.tienda + prev.marley;
+          const icon  = (p.tipo_cuarto === 'Caliente') ? '&#128293;' : '&#10052;&#65039;';
+          return `
+            <div class="items-center px-4 py-2.5 border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors"
+                 style="display:grid; grid-template-columns: 2.5rem 5rem 1fr 6.5rem 6.5rem 6.5rem 5.5rem;"
+                 data-plu="${p.plu_id}">
+              <span class="text-lg" title="${p.tipo_cuarto}">${icon}</span>
+              <span class="font-mono text-xs text-gray-600">${p.plu_id}</span>
+              <span class="text-white font-semibold text-sm pr-2">${p.nombre}</span>
+              <div class="px-1">
+                <input type="number" min="0" id="sala-${p.plu_id}"
+                  value="${prev.sala > 0 ? prev.sala : ''}" placeholder="0"
+                  oninput="onInputChange()"
+                  class="${inputBase} focus:border-purple-500" />
+              </div>
+              <div class="px-1">
+                <input type="number" min="0" id="tienda-${p.plu_id}"
+                  value="${prev.tienda > 0 ? prev.tienda : ''}" placeholder="0"
+                  oninput="onInputChange()"
+                  class="${inputBase} focus:border-sky-500" />
+              </div>
+              <div class="px-1">
+                <input type="number" min="0" id="marley-${p.plu_id}"
+                  value="${prev.marley > 0 ? prev.marley : ''}" placeholder="0"
+                  oninput="onInputChange()"
+                  class="${inputBase} focus:border-amber-500" />
+              </div>
+              <div class="flex items-center justify-center">
+                <span id="total-${p.plu_id}"
+                      class="${total > 0 ? 'text-center font-black text-xl text-green-400' : 'text-center text-gray-700 text-sm'}">
+                  ${total > 0 ? total : '\u2014'}
+                </span>
+              </div>
+            </div>`;
+        }).join('');
+      }
+
+      let html = '';
+      if (calientes.length) {
+        html += `<div class="px-4 py-2.5 bg-orange-950/30 border-b border-orange-900/40 flex items-center gap-2">
+          <span class="text-orange-400 font-black text-sm uppercase tracking-widest">&#128293; Cuarto Caliente</span>
+          <span class="bg-orange-900/50 text-orange-400 text-xs font-bold px-2 py-0.5 rounded-full">${calientes.length} productos</span>
+        </div>${filas(calientes)}`;
+      }
+      if (frios.length) {
+        html += `<div class="px-4 py-2.5 bg-blue-950/30 border-b border-blue-900/40 flex items-center gap-2">
+          <span class="text-blue-400 font-black text-sm uppercase tracking-widest">&#10052;&#65039; Cuarto Frio</span>
+          <span class="bg-blue-900/50 text-blue-400 text-xs font-bold px-2 py-0.5 rounded-full">${frios.length} productos</span>
+        </div>${filas(frios)}`;
+      }
+
+      document.getElementById('tabla-productos').innerHTML = html ||
+        '<div class="py-12 text-center text-gray-600">No hay productos en el catalogo.</div>';
+
+      onInputChange();
+    }
+
+    async function cargarTabla(fecha) {
+      document.getElementById('tabla-productos').innerHTML =
+        '<div class="py-12 text-center text-gray-600 animate-pulse">&#9203; Cargando...</div>';
+      document.getElementById('resumen-box').classList.add('hidden');
+      try {
+        const [resProds, resPlan] = await Promise.all([
+          fetch('/api/productos'),
+          fetch('/api/planificacion?fecha=' + fecha),
+        ]);
+        renderTabla(await resProds.json(), await resPlan.json());
+      } catch {
+        document.getElementById('tabla-productos').innerHTML =
+          '<div class="py-12 text-center text-red-500">&#10060; Error al cargar datos.</div>';
+      }
+    }
+
+    async function guardarBatch() {
+      const fecha = fechaInput.value;
+      const items = [];
+      document.querySelectorAll('[data-plu]').forEach(div => {
+        const plu_id     = div.dataset.plu;
+        const cant_sala   = parseInt(document.getElementById('sala-'   + plu_id).value) || 0;
+        const cant_tienda = parseInt(document.getElementById('tienda-' + plu_id).value) || 0;
+        const cant_marley = parseInt(document.getElementById('marley-' + plu_id).value) || 0;
+        if (cant_sala + cant_tienda + cant_marley > 0)
+          items.push({ plu_id, cant_sala, cant_tienda, cant_marley });
+      });
+
+      if (!items.length) { toast('toast-guardar', '&#9888; Ingresa al menos un valor.', 'err'); return; }
+
+      const btn = document.getElementById('btn-guardar');
+      btn.textContent = '&#9203; Guardando...';
+      btn.disabled    = true;
+
+      try {
+        const res  = await fetch('/api/planificacion/batch', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fecha, items }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          toast('toast-guardar', '&#10003; Planificacion guardada! ' + data.guardados + ' producto(s).', 'ok');
+          await cargarTabla(fecha);
+        } else {
+          toast('toast-guardar', '&#10060; Error: ' + data.error, 'err');
+          btn.disabled = false;
+        }
+      } catch {
+        toast('toast-guardar', '&#10060; Error de conexion.', 'err');
+        btn.disabled = false;
+      }
+      btn.textContent = '&#128190; GUARDAR PLANIFICACION DEL DIA';
+    }
+
+    async function agregarProducto() {
+      const plu_id      = document.getElementById('np-plu').value.trim();
+      const nombre      = document.getElementById('np-nombre').value.trim();
+      const tipo_cuarto = document.getElementById('np-tipo').value;
+      if (!plu_id || !nombre) { toast('toast-prod', '&#9888; Completa PLU y nombre.', 'err'); return; }
+      try {
+        const res  = await fetch('/api/productos', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plu_id, nombre, tipo_cuarto }),
+        });
+        const data = await res.json();
+        if (res.status === 201 || data.success) {
+          toast('toast-prod', '&#10003; Producto agregado.', 'ok');
+          document.getElementById('np-plu').value = '';
+          document.getElementById('np-nombre').value = '';
+          cargarTabla(fechaInput.value);
+        } else { toast('toast-prod', '&#10060; ' + data.error, 'err'); }
+      } catch { toast('toast-prod', '&#10060; Error de conexion.', 'err'); }
+    }
+
+    cargarTabla(today);
+  </script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🔥 KDS – Cuarto Caliente</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.35; }
+    }
+    .blink { animation: blink 0.8s ease-in-out infinite; }
+  </style>
+</head>
+<body class="bg-gray-950 min-h-screen p-4 md:p-8">
+
+  <!-- ── HEADER ── -->
+  <header class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
+    <div class="flex items-center gap-4">
+      <a href="/"
+         class="flex items-center justify-center w-10 h-10 rounded-xl
+                bg-gray-900 hover:bg-gray-800 text-gray-600 hover:text-white
+                transition-colors text-xl font-bold shrink-0">
+        ←
+      </a>
+      <div>
+        <div class="flex items-center gap-3">
+          <span class="text-4xl">🔥</span>
+          <h1 class="text-3xl md:text-5xl font-black text-orange-300 tracking-tight">
+            KDS – CUARTO CALIENTE
+          </h1>
+        </div>
+        <p class="text-gray-600 text-sm ml-1" id="fecha-display"></p>
+      </div>
+    </div>
+    <!-- Contador -->
+    <div class="flex items-center gap-4 sm:text-right">
+      <div class="text-right">
+        <div class="text-xs text-gray-600 uppercase tracking-wider">Última actualización</div>
+        <div class="text-gray-400 font-mono text-sm" id="ultima-act">—</div>
+      </div>
+      <div class="bg-gray-900 border border-orange-900 rounded-2xl px-5 py-3 text-center">
+        <div class="text-4xl font-black font-mono text-orange-400" id="countdown">30s</div>
+        <div class="text-gray-600 text-xs mt-0.5">próxima recarga</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Banda de color identificadora -->
+  <div class="w-full h-1 bg-orange-600 rounded-full mb-8 opacity-60"></div>
+
+  <div id="banner-estado" class="hidden mb-6 text-center py-4 rounded-2xl font-bold text-xl"></div>
+
+  <main id="kds-root">
+    <div class="flex items-center justify-center h-64">
+      <p class="text-gray-600 text-2xl animate-pulse">⏳ Cargando planificación…</p>
+    </div>
+  </main>
+
+  <script>
+    const REFRESH_INTERVAL = 30;
+    const today = new Date().toISOString().slice(0, 10);
+    // ── Este KDS filtra SOLO el cuarto Caliente ──
+    const TIPO_CUARTO = 'Caliente';
+
+    document.getElementById('fecha-display').textContent =
+      new Date().toLocaleDateString('es-PE', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      });
+
+    let secondsLeft = 0;
+
+    function tickContador() {
+      const el = document.getElementById('countdown');
+      if (secondsLeft <= 0) { cargarKDS(); secondsLeft = REFRESH_INTERVAL; }
+      el.textContent = `${secondsLeft}s`;
+      if (secondsLeft <= 5) {
+        el.classList.remove('text-orange-400');
+        el.classList.add('text-red-400', 'blink');
+      } else {
+        el.classList.remove('text-red-400', 'blink');
+        el.classList.add('text-orange-400');
+      }
+      secondsLeft--;
+    }
+
+    function renderCard(item) {
+      return `
+        <div class="bg-gray-900 border-2 border-orange-700
+                    rounded-2xl p-6 flex flex-col justify-between
+                    hover:brightness-110 transition-all">
+          <div>
+            <span class="inline-block text-xs font-mono px-2 py-0.5 rounded-full mb-3
+                         bg-orange-900 text-orange-300">
+              ${item.plu_id}
+            </span>
+            <h3 class="text-white text-2xl md:text-3xl font-black leading-tight mb-6">
+              ${item.nombre}
+            </h3>
+          </div>
+          <div class="flex items-end justify-between">
+            <span class="text-gray-500 text-sm">Cantidad planificada</span>
+            <span class="text-orange-300 text-7xl font-black leading-none tabular-nums">
+              ${item.cantidad_planificada}
+            </span>
+          </div>
+        </div>`;
+    }
+
+    async function cargarKDS() {
+      try {
+        const res   = await fetch(
+          `/api/planificacion/kds?fecha=${today}&tipo=${encodeURIComponent(TIPO_CUARTO)}`
+        );
+        const items = await res.json();
+        document.getElementById('ultima-act').textContent =
+          new Date().toLocaleTimeString('es-PE');
+
+        const root   = document.getElementById('kds-root');
+        const banner = document.getElementById('banner-estado');
+
+        if (!Array.isArray(items) || items.length === 0) {
+          banner.className =
+            'mb-6 text-center py-4 rounded-2xl font-bold text-xl ' +
+            'bg-gray-900 text-gray-500 border border-gray-800';
+          banner.textContent = '🔥 Sin planificación activa en Cuarto Caliente para hoy';
+          banner.classList.remove('hidden');
+          root.innerHTML = '';
+          return;
+        }
+
+        banner.classList.add('hidden');
+        root.innerHTML = `
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            ${items.map(renderCard).join('')}
+          </div>`;
+
+      } catch {
+        document.getElementById('kds-root').innerHTML = `
+          <div class="text-center py-20">
+            <p class="text-red-500 text-2xl font-bold">❌ Error de conexión al servidor</p>
+            <p class="text-gray-600 mt-2 text-sm">Reintentando en ${REFRESH_INTERVAL} segundos…</p>
+          </div>`;
+      }
+    }
+
+    setInterval(tickContador, 1000);
+    tickContador();
+  </script>
+</body>
+</html>

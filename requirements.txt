@@ -1,0 +1,27 @@
+# ============================================================
+#  Kitchen Manager – Dependencias del proyecto (Node.js)
+#  Equivalente al requirements.txt de Python
+# ============================================================
+#
+#  Para instalar todas las dependencias en cualquier computador:
+#
+#     npm install
+#
+#  Eso leerá package.json y bajará todo automáticamente.
+#  Los paquetes se guardan en la carpeta node_modules/
+# ============================================================
+
+# ── Dependencias de Producción ───────────────────────────────
+express@^4.19.2         # Framework web HTTP para Node.js
+mysql2@^3.9.7           # Driver MySQL / MariaDB (con soporte Promises)
+dotenv@^16.4.5          # Carga variables de entorno desde .env
+
+# ── Dependencias de Desarrollo (opcionales) ──────────────────
+nodemon@^3.1.0          # Reinicia el servidor automáticamente al editar
+
+# ============================================================
+#  Versiones de entorno requeridas:
+#    Node.js  >= 18.x   (recomendado: 20 LTS)
+#    npm      >= 9.x    (incluido con Node.js)
+#    MySQL    >= 8.0    (o MariaDB >= 10.6)
+# ============================================================

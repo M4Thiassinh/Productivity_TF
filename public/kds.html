@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📺 KDS – Pantalla Cocina</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Animación de parpadeo suave para el número de cuenta regresiva
+       cuando quedan ≤5 segundos */
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+    .blink { animation: blink 0.8s ease-in-out infinite; }
+
+    /* Transición suave al actualizar las tarjetas */
+    .kds-card {
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+  </style>
+</head>
+<body class="bg-gray-950 min-h-screen p-4 md:p-8">
+
+  <!-- ── HEADER KDS ── -->
+  <header class="flex flex-col sm:flex-row sm:justify-between sm:items-center
+                 gap-4 mb-8">
+    <div class="flex items-center gap-4">
+      <a href="/"
+         class="flex items-center justify-center w-10 h-10 rounded-xl
+                bg-gray-900 hover:bg-gray-800 text-gray-600 hover:text-white
+                transition-colors text-xl font-bold shrink-0">
+        ←
+      </a>
+      <div>
+        <h1 class="text-3xl md:text-4xl font-black text-white tracking-tight">
+          📺 PANTALLA COCINA
+        </h1>
+        <p class="text-gray-600 text-sm" id="fecha-display"></p>
+      </div>
+    </div>
+
+    <!-- Contador regresivo + indicador de actualización -->
+    <div class="flex items-center gap-4 sm:text-right">
+      <div class="text-right">
+        <div class="text-sm text-gray-600 uppercase tracking-wider">
+          Última actualización
+        </div>
+        <div class="text-gray-400 font-mono text-sm" id="ultima-act">—</div>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-2xl px-5 py-3 text-center">
+        <div class="text-4xl font-black font-mono text-emerald-400"
+             id="countdown">30s</div>
+        <div class="text-gray-600 text-xs mt-0.5">próxima recarga</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── BANNER: estado de la pantalla ── -->
+  <div id="banner-estado"
+       class="hidden mb-6 text-center py-4 rounded-2xl font-bold text-xl">
+  </div>
+
+  <!-- ── CONTENIDO KDS ── -->
+  <main id="kds-root">
+    <div class="flex items-center justify-center h-64">
+      <p class="text-gray-600 text-2xl animate-pulse">⏳ Cargando planificación…</p>
+    </div>
+  </main>
+
+  <script>
+    // ── Config ───────────────────────────────────────────────────
+    const REFRESH_INTERVAL = 30; // segundos
+    const today = new Date().toISOString().slice(0, 10);
+
+    document.getElementById('fecha-display').textContent =
+      new Date().toLocaleDateString('es-PE', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      });
+
+    // ── Contador regresivo ────────────────────────────────────────
+    let secondsLeft = 0; // arranca en 0 para forzar carga inmediata
+
+    function tickContador() {
+      const el = document.getElementById('countdown');
+
+      if (secondsLeft <= 0) {
+        cargarKDS();
+        secondsLeft = REFRESH_INTERVAL;
+      }
+
+      el.textContent = `${secondsLeft}s`;
+
+      // Parpadea rojo cuando queda ≤5 s
+      if (secondsLeft <= 5) {
+        el.classList.remove('text-emerald-400');
+        el.classList.add('text-red-400', 'blink');
+      } else {
+        el.classList.remove('text-red-400', 'blink');
+        el.classList.add('text-emerald-400');
+      }
+
+      secondsLeft--;
+    }
+
+    // ── Render de tarjeta de producto ────────────────────────────
+    function renderCard(item) {
+      const esCaliente = item.tipo_cuarto === 'Caliente';
+      const border     = esCaliente ? 'border-orange-700'  : 'border-blue-700';
+      const numColor   = esCaliente ? 'text-orange-400'    : 'text-blue-400';
+      const badge      = esCaliente
+        ? 'bg-orange-900 text-orange-300'
+        : 'bg-blue-900 text-blue-300';
+
+      return `
+        <div class="kds-card bg-gray-900 border-2 ${border}
+                    rounded-2xl p-6 flex flex-col justify-between
+                    hover:brightness-110 transition-all">
+          <div>
+            <span class="inline-block text-xs font-mono px-2 py-0.5
+                         rounded-full mb-3 ${badge}">
+              ${item.plu_id}
+            </span>
+            <h3 class="text-white text-2xl md:text-3xl font-black leading-tight mb-6">
+              ${item.nombre}
+            </h3>
+          </div>
+          <div class="flex items-end justify-between">
+            <span class="text-gray-500 text-sm">Cantidad planificada</span>
+            <span class="${numColor} text-7xl font-black leading-none tabular-nums">
+              ${item.cantidad_planificada}
+            </span>
+          </div>
+        </div>`;
+    }
+
+    // ── Fetch y render principal ──────────────────────────────────
+    async function cargarKDS() {
+      try {
+        const res   = await fetch(`/api/planificacion/kds?fecha=${today}`);
+        const items = await res.json();
+
+        document.getElementById('ultima-act').textContent =
+          new Date().toLocaleTimeString('es-PE');
+
+        const root   = document.getElementById('kds-root');
+        const banner = document.getElementById('banner-estado');
+
+        if (!Array.isArray(items) || items.length === 0) {
+          banner.className =
+            'mb-6 text-center py-4 rounded-2xl font-bold text-xl ' +
+            'bg-gray-900 text-gray-500 border border-gray-800';
+          banner.textContent = '📋 Sin planificación activa para hoy';
+          banner.classList.remove('hidden');
+          root.innerHTML = '';
+          return;
+        }
+
+        banner.classList.add('hidden');
+
+        const calientes = items.filter(i => i.tipo_cuarto === 'Caliente');
+        const frios     = items.filter(i => i.tipo_cuarto === 'Frío');
+
+        let html = '';
+
+        if (calientes.length) {
+          html += `
+            <section class="mb-10">
+              <div class="flex items-center gap-3 mb-5">
+                <span class="text-3xl">🔥</span>
+                <h2 class="text-3xl font-black text-orange-400 uppercase tracking-widest">
+                  Cuarto Caliente
+                </h2>
+                <div class="flex-1 h-px bg-orange-900"></div>
+                <span class="bg-orange-900 text-orange-300 text-sm font-bold
+                             px-3 py-1 rounded-full">
+                  ${calientes.length} ítem${calientes.length > 1 ? 's' : ''}
+                </span>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                ${calientes.map(renderCard).join('')}
+              </div>
+            </section>`;
+        }
+
+        if (frios.length) {
+          html += `
+            <section>
+              <div class="flex items-center gap-3 mb-5">
+                <span class="text-3xl">❄️</span>
+                <h2 class="text-3xl font-black text-blue-400 uppercase tracking-widest">
+                  Cuarto Frío
+                </h2>
+                <div class="flex-1 h-px bg-blue-900"></div>
+                <span class="bg-blue-900 text-blue-300 text-sm font-bold
+                             px-3 py-1 rounded-full">
+                  ${frios.length} ítem${frios.length > 1 ? 's' : ''}
+                </span>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                ${frios.map(renderCard).join('')}
+              </div>
+            </section>`;
+        }
+
+        root.innerHTML = html;
+
+      } catch (e) {
+        document.getElementById('kds-root').innerHTML = `
+          <div class="text-center py-20">
+            <p class="text-red-500 text-2xl font-bold">
+              ❌ Error de conexión al servidor
+            </p>
+            <p class="text-gray-600 mt-2 text-sm">
+              Reintentando en ${REFRESH_INTERVAL} segundos…
+            </p>
+          </div>`;
+      }
+    }
+
+    // ── Arranque ─────────────────────────────────────────────────
+    setInterval(tickContador, 1000);
+    tickContador(); // primer tick inmediato
+  </script>
+</body>
+</html>
