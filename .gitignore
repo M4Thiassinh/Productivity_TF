@@ -1,38 +1,45 @@
-# --- Python ---
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# ==========================================
+# 🛑 CREDENCIALES Y VARIABLES DE ENTORNO (¡CRÍTICO!)
+# ==========================================
+.env
+.env.*
+*.pem
+*.key
 
-# --- Ambientes Virtuales (NUNCA subir esto) ---
+# ==========================================
+# 📦 NODE.JS (Si usaste Express)
+# ==========================================
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# ==========================================
+# 🐍 PYTHON (Si usaste FastAPI)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
 venv/
 env/
-.env
-.venv
+.venv/
 
-# --- Jupyter Notebooks ---
-# Ignorar los autosalvados temporales
-.ipynb_checkpoints
-*/.ipynb_checkpoints/*
-
-# --- DATOS ---
-data/raw/*
-data/processed/*
-
-# ...pero mantenemos las carpetas vacías usando un archivo .gitkeep (ver truco abajo)
-!data/raw/.gitkeep
-!data/processed/.gitkeep
-
-# --- Archivos generados / Exports temporales ---
-*.csv
-*.xlsx
-*.xls
-*.json
-*.log
-*.sql
-
-# --- IDEs y Sistema Operativo ---
+# ==========================================
+# 💻 EDITORES DE CÓDIGO (VS Code)
+# ==========================================
 .vscode/
 .idea/
+
+# ==========================================
+# 🖥️ SISTEMAS OPERATIVOS (Basura de Windows/Mac)
+# ==========================================
 .DS_Store
 Thumbs.db
+Desktop.ini
+
+# ==========================================
+# 📊 DATOS LOCALES (Protege los datos de Teja Food)
+# ==========================================
+*.csv
+*.xlsx
+*.log
