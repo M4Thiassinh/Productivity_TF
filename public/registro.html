@@ -26,6 +26,9 @@
 
   <div class="max-w-4xl mx-auto space-y-4">
 
+    <!-- DATALIST COCINEROS: se puebla dinámicamente desde GET /api/cocineros -->
+    <datalist id="lista-cocineros"></datalist>
+
     <!-- INFO -->
     <div class="bg-orange-950/50 border border-orange-800/60 rounded-2xl px-5 py-3 flex items-start gap-3">
       <span class="text-lg shrink-0 mt-0.5">&#128204;</span>
@@ -49,6 +52,42 @@
       &#128190; GUARDAR TODO
     </button>
     <div id="toast-todo" class="hidden text-center py-3 px-5 rounded-xl font-semibold text-base"></div>
+
+    <!-- ══════════════════════════════════════════════════════
+         REPORTE EN EXCEL
+    ══════════════════════════════════════════════════════ -->
+    <div class="bg-gray-900 border border-gray-700 rounded-2xl p-6 space-y-4 mt-4">
+      <div class="flex items-center gap-3 border-b border-gray-700 pb-4">
+        <span class="text-2xl">&#128202;</span>
+        <div>
+          <h2 class="font-black text-lg leading-tight">Reporte de Producción</h2>
+          <p class="text-gray-500 text-xs mt-0.5">Descarga un Excel con todo lo producido y mermado en un rango de fechas.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1.5 block">📅 Fecha Inicio</label>
+          <input type="date" id="rpt-desde"
+                 class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2
+                        text-white font-bold text-base focus:outline-none focus:border-emerald-500 transition-colors" />
+        </div>
+        <div>
+          <label class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1.5 block">📅 Fecha Fin</label>
+          <input type="date" id="rpt-hasta"
+                 class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2
+                        text-white font-bold text-base focus:outline-none focus:border-emerald-500 transition-colors" />
+        </div>
+      </div>
+
+      <button onclick="descargarExcel()"
+              class="w-full bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 text-white
+                     font-black py-4 rounded-2xl text-lg transition-all tracking-widest shadow-lg
+                     shadow-emerald-900/40 flex items-center justify-center gap-3">
+        &#11015;&#65039; DESCARGAR EXCEL
+      </button>
+      <div id="toast-excel" class="hidden text-center py-3 px-5 rounded-xl font-semibold text-sm"></div>
+    </div>
 
   </div>
 
@@ -95,8 +134,10 @@
           const real       = p.cantidad_real || '';
           const mermas     = p.mermas        || '';
           const coment     = p.comentarios   || '';
+          const cocinero_id  = p.cocinero_id     ?? null;
+          const cocinero_nom = p.cocinero_nombre || '';
           return `
-            <div id="card-${p.plu_id}" class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+            <div id="card-${p.plu_id}" data-plan="${planTotal}" class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
               <!-- Cabecera tarjeta -->
               <div class="px-5 py-3 flex flex-wrap items-center gap-3 bg-gray-800/40 border-b border-gray-700/50">
                 <span class="text-xl">${icon}</span>
@@ -122,6 +163,16 @@
               </div>
               <!-- Inputs -->
               <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Cocinero (fila completa) -->
+                <div class="sm:col-span-2">
+                  <label class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1.5 block">&#128104;&#8205;&#127859; Cocinero</label>
+                  <input type="text" list="lista-cocineros"
+                         id="cocinero-${p.plu_id}" value="${cocinero_nom}"
+                         placeholder="Escribe o selecciona un nombre..."
+                         oninput="habilitarGuardarTodo()"
+                         autocomplete="off"
+                         class="${inputCls} focus:border-violet-500" />
+                </div>
                 <div>
                   <label class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1.5 block">Cantidad Real</label>
                   <input type="number" min="0" id="real-${p.plu_id}" value="${real}" placeholder="0"
@@ -191,35 +242,52 @@
       const cantidad_real = parseInt(document.getElementById('real-'       + plu_id).value) || 0;
       const mermas        = parseInt(document.getElementById('merma-'      + plu_id).value) || 0;
       const comentarios   =          document.getElementById('comentario-' + plu_id).value.trim();
+      const cocineroNom   =          document.getElementById('cocinero-'   + plu_id).value.trim();
 
-      const btn   = document.getElementById('btn-save-' + plu_id);
-      const toastEl = document.getElementById('toast-' + plu_id);
+      const btn     = document.getElementById('btn-save-' + plu_id);
+      const toastEl = document.getElementById('toast-'    + plu_id);
+      const card    = document.getElementById('card-'     + plu_id);
+      const plan    = parseInt(card.dataset.plan) || 0;
+
+      // ── Validación en el cliente ───────────────────────────────
+      if (plan > 0 && (cantidad_real + mermas) > plan) {
+        toastEl.className   = 'text-sm font-semibold text-red-400';
+        toastEl.textContent = `⚠️ Real (${cantidad_real}) + Mermas (${mermas}) = ${cantidad_real + mermas} — supera lo planificado (${plan})`;
+        setTimeout(() => { toastEl.className = 'hidden'; toastEl.textContent = ''; }, 5000);
+        return;
+      }
+
+      // ── Resolver cocinero_id por nombre ──────────────────────────
+      const cocineroObj = (window.cocinerosList || []).find(
+        c => c.nombre.toLowerCase() === cocineroNom.toLowerCase()
+      );
+      const cocinero_id = cocineroObj ? cocineroObj.id : null;
 
       btn.disabled    = true;
-      btn.textContent = '&#9203;';
+      btn.textContent = '⏳';
 
       try {
         const res  = await fetch('/api/produccion', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fecha, plu_id, cantidad_real, mermas, comentarios }),
+          body: JSON.stringify({ fecha, plu_id, cantidad_real, mermas, comentarios, cocinero_id }),
         });
         const data = await res.json();
         if (data.success) {
           toastEl.className   = 'text-sm font-semibold text-green-400';
-          toastEl.textContent = '&#10003; Guardado!';
-          document.getElementById('card-' + plu_id).classList.add('ring-1', 'ring-green-700');
+          toastEl.textContent = '✓ Guardado!';
+          card.classList.add('ring-1', 'ring-green-700');
         } else {
           toastEl.className   = 'text-sm font-semibold text-red-400';
-          toastEl.textContent = '&#10060; Error.';
+          toastEl.textContent = '✖ ' + (data.error || 'Error.');
         }
       } catch {
         toastEl.className   = 'text-sm font-semibold text-red-400';
-        toastEl.textContent = '&#10060; Sin conexion.';
+        toastEl.textContent = '✖ Sin conexión.';
       }
 
       btn.disabled    = false;
       btn.textContent = '&#128190; Guardar esta fila';
-      setTimeout(() => { toastEl.className = 'hidden'; toastEl.textContent = ''; }, 3500);
+      setTimeout(() => { toastEl.className = 'hidden'; toastEl.textContent = ''; }, 4000);
     }
 
     async function guardarTodo() {
@@ -229,16 +297,36 @@
       btn.textContent = '&#9203; Guardando...';
 
       const inputs = document.querySelectorAll('[id^="real-"]');
-      let ok = 0, errores = 0;
+      let ok = 0, errores = 0, bloqueados = 0;
       for (const inp of inputs) {
-        const plu_id      = inp.id.replace('real-', '');
+        const plu_id        = inp.id.replace('real-', '');
         const cantidad_real = parseInt(inp.value) || 0;
-        const mermas      = parseInt(document.getElementById('merma-'      + plu_id).value) || 0;
-        const comentarios =          document.getElementById('comentario-' + plu_id).value.trim();
+        const mermas        = parseInt(document.getElementById('merma-'      + plu_id).value) || 0;
+        const comentarios   =          document.getElementById('comentario-' + plu_id).value.trim();
+        const cocineroNom   =          document.getElementById('cocinero-'   + plu_id).value.trim();
+        const card          = document.getElementById('card-'     + plu_id);
+        const plan          = parseInt(card?.dataset.plan) || 0;
+        const toastEl       = document.getElementById('toast-' + plu_id);
+
+        // Validación por ítem
+        if (plan > 0 && (cantidad_real + mermas) > plan) {
+          bloqueados++;
+          if (toastEl) {
+            toastEl.className   = 'text-sm font-semibold text-red-400';
+            toastEl.textContent = `⚠️ ${cantidad_real + mermas} supera plan (${plan})`;
+          }
+          continue;
+        }
+
+        const cocineroObj = (window.cocinerosList || []).find(
+          c => c.nombre.toLowerCase() === cocineroNom.toLowerCase()
+        );
+        const cocinero_id = cocineroObj ? cocineroObj.id : null;
+
         try {
           const res  = await fetch('/api/produccion', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fecha, plu_id, cantidad_real, mermas, comentarios }),
+            body: JSON.stringify({ fecha, plu_id, cantidad_real, mermas, comentarios, cocinero_id }),
           });
           const data = await res.json();
           if (data.success) ok++; else errores++;
@@ -246,12 +334,15 @@
       }
 
       const toastEl = document.getElementById('toast-todo');
-      if (errores === 0) {
+      if (errores === 0 && bloqueados === 0) {
         toastEl.className   = 'text-center py-3 px-5 rounded-xl font-semibold text-base bg-green-900 text-green-300 border border-green-700';
         toastEl.textContent = '\u2713 Todo guardado! ' + ok + ' producto(s) registrados.';
       } else {
+        const partes = [];
+        if (errores    > 0) partes.push(errores    + ' error(es) al guardar');
+        if (bloqueados > 0) partes.push(bloqueados + ' bloqueado(s) por superar lo planificado');
         toastEl.className   = 'text-center py-3 px-5 rounded-xl font-semibold text-base bg-red-900 text-red-300 border border-red-700';
-        toastEl.textContent = '\u26a0 ' + errores + ' errores al guardar.';
+        toastEl.textContent = '\u26a0 ' + partes.join(' · ') + '.';
       }
       clearTimeout(toastEl._t);
       toastEl._t = setTimeout(() => { toastEl.className = 'hidden'; }, 4000);
@@ -260,6 +351,76 @@
       btn.disabled    = false;
     }
 
+    // Inicializa los inputs de fecha del reporte con hoy como valor por defecto
+    document.getElementById('rpt-desde').value = today;
+    document.getElementById('rpt-hasta').value = today;
+
+    async function descargarExcel() {
+      const desde = document.getElementById('rpt-desde').value;
+      const hasta = document.getElementById('rpt-hasta').value;
+      const toastEl = document.getElementById('toast-excel');
+
+      if (!desde || !hasta) {
+        toastEl.className   = 'text-center py-3 px-5 rounded-xl font-semibold text-sm bg-red-900 text-red-300 border border-red-700';
+        toastEl.textContent = '⚠ Debes seleccionar fecha de inicio y fin.';
+        clearTimeout(toastEl._t);
+        toastEl._t = setTimeout(() => { toastEl.className = 'hidden'; }, 4000);
+        return;
+      }
+      if (desde > hasta) {
+        toastEl.className   = 'text-center py-3 px-5 rounded-xl font-semibold text-sm bg-red-900 text-red-300 border border-red-700';
+        toastEl.textContent = '⚠ La fecha de inicio no puede ser posterior a la fecha fin.';
+        clearTimeout(toastEl._t);
+        toastEl._t = setTimeout(() => { toastEl.className = 'hidden'; }, 4000);
+        return;
+      }
+
+      toastEl.className   = 'text-center py-3 px-5 rounded-xl font-semibold text-sm bg-gray-800 text-gray-300 border border-gray-600';
+      toastEl.textContent = '⏳ Generando Excel, un momento...';
+
+      try {
+        const response = await fetch(`/api/informes/excel?desde=${desde}&hasta=${hasta}`);
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({ error: 'Error desconocido.' }));
+          throw new Error(err.error || 'Error del servidor.');
+        }
+
+        // Fuerza la descarga en el navegador sin abrir nueva pestaña
+        const blob     = await response.blob();
+        const url      = URL.createObjectURL(blob);
+        const anchor   = document.createElement('a');
+        anchor.href    = url;
+        anchor.download = `produccion_${desde}_${hasta}.xlsx`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+
+        toastEl.className   = 'text-center py-3 px-5 rounded-xl font-semibold text-sm bg-green-900 text-green-300 border border-green-700';
+        toastEl.textContent = '✓ Excel descargado correctamente.';
+      } catch (e) {
+        toastEl.className   = 'text-center py-3 px-5 rounded-xl font-semibold text-sm bg-red-900 text-red-300 border border-red-700';
+        toastEl.textContent = '✗ ' + e.message;
+      }
+      clearTimeout(toastEl._t);
+      toastEl._t = setTimeout(() => { toastEl.className = 'hidden'; }, 5000);
+    }
+
+    // ── Carga catálogo de cocineros desde la API al inicio ─────────────────
+    async function cargarCocineros() {
+      try {
+        const res = await fetch('/api/cocineros');
+        window.cocinerosList = await res.json();
+        const dl = document.getElementById('lista-cocineros');
+        dl.innerHTML = window.cocinerosList
+          .map(c => `<option value="${c.nombre}"></option>`)
+          .join('');
+      } catch {
+        window.cocinerosList = [];
+      }
+    }
+
+    cargarCocineros();
     cargar(today);
   </script>
 </body>

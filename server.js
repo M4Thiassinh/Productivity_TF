@@ -9,6 +9,7 @@ require('dotenv').config();
 const express = require('express');
 const mysql   = require('mysql2/promise');
 const path    = require('path');
+const ExcelJS = require('exceljs');
 
 const app = express();
 app.use(express.json());
@@ -61,6 +62,20 @@ app.post('/api/productos', async (req, res) => {
       [plu_id.trim(), nombre.trim(), tipo_cuarto]
     );
     res.status(201).json({ success: true });
+  } catch (e) { err500(res, e); }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  COCINEROS
+// ══════════════════════════════════════════════════════════════
+
+// GET /api/cocineros  → Lista el catálogo de cocineros
+app.get('/api/cocineros', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, nombre FROM cocineros ORDER BY nombre'
+    );
+    res.json(rows);
   } catch (e) { err500(res, e); }
 });
 
@@ -191,11 +206,14 @@ app.get('/api/produccion', async (req, res) => {
               pd.cant_sala, pd.cant_tienda, pd.cant_marley, pd.cantidad_planificada,
               COALESCE(pr.cantidad_real, 0)  AS cantidad_real,
               COALESCE(pr.mermas,        0)  AS mermas,
-              COALESCE(pr.comentarios,   '') AS comentarios
+              COALESCE(pr.comentarios,   '') AS comentarios,
+              pr.cocinero_id,
+              COALESCE(c.nombre,         '') AS cocinero_nombre
          FROM planificacion_diaria pd
          JOIN productos p ON pd.plu_id = p.plu_id
          LEFT JOIN produccion_real pr
            ON pr.plu_id = pd.plu_id AND pr.fecha = pd.fecha
+         LEFT JOIN cocineros c ON c.id = pr.cocinero_id
         WHERE pd.fecha = ?
           AND pd.cantidad_planificada > 0
         ORDER BY p.tipo_cuarto DESC, p.nombre`,
@@ -207,29 +225,140 @@ app.get('/api/produccion', async (req, res) => {
 
 // POST /api/produccion
 //      Inserta o actualiza el registro de producción real de un ítem.
-//      Solo recibe: cantidad_real, mermas y comentarios.
-//      La distribución sala/tienda es responsabilidad del jefe (planificacion_diaria).
+//      VALIDA que cantidad_real + mermas no supere cantidad_planificada.
 app.post('/api/produccion', async (req, res) => {
-  const { fecha, plu_id, cantidad_real, mermas, comentarios } = req.body;
+  const { fecha, plu_id, cantidad_real, mermas, comentarios, cocinero_id } = req.body;
   if (!fecha || !plu_id)
     return res.status(400).json({ error: 'fecha y plu_id son requeridos.' });
+
+  const real  = Number(cantidad_real) || 0;
+  const merma = Number(mermas)        || 0;
+
   try {
+    // ── Validación contra lo planificado ──────────────────────────────
+    const [[plan]] = await pool.execute(
+      'SELECT cantidad_planificada FROM planificacion_diaria WHERE fecha = ? AND plu_id = ?',
+      [fecha, plu_id]
+    );
+    if (plan) {
+      const planificado = plan.cantidad_planificada || 0;
+      if ((real + merma) > planificado) {
+        return res.status(400).json({
+          error: `Real (${real}) + Mermas (${merma}) = ${real + merma} supera lo planificado (${planificado}).`,
+          planificado,
+          ingresado: real + merma,
+        });
+      }
+    }
+
+    // ── Persistir ──────────────────────────────────────────────────
     await pool.execute(
       `INSERT INTO produccion_real
-              (fecha, plu_id, cantidad_real, mermas, comentarios)
-            VALUES (?, ?, ?, ?, ?)
+              (fecha, plu_id, cantidad_real, mermas, comentarios, cocinero_id)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
               cantidad_real = VALUES(cantidad_real),
               mermas        = VALUES(mermas),
-              comentarios   = VALUES(comentarios)`,
+              comentarios   = VALUES(comentarios),
+              cocinero_id   = VALUES(cocinero_id)`,
       [
-        fecha, plu_id,
-        Number(cantidad_real) || 0,
-        Number(mermas)        || 0,
+        fecha, plu_id, real, merma,
         (comentarios || '').trim(),
+        cocinero_id  || null,
       ]
     );
     res.json({ success: true });
+  } catch (e) { err500(res, e); }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  INFORMES
+// ══════════════════════════════════════════════════════════════
+
+// GET /api/informes/excel?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+//     Descarga un .xlsx con toda la producción y mermas del rango.
+app.get('/api/informes/excel', async (req, res) => {
+  const { desde, hasta } = req.query;
+
+  // Validación de formato para evitar valores inesperados
+  const fechaRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!desde || !hasta || !fechaRegex.test(desde) || !fechaRegex.test(hasta))
+    return res.status(400).json({ error: 'Parámetros desde y hasta requeridos (formato YYYY-MM-DD).' });
+  if (desde > hasta)
+    return res.status(400).json({ error: '"desde" no puede ser posterior a "hasta".' });
+
+  try {
+    const [rows] = await pool.execute(
+      `SELECT pr.fecha,
+              p.plu_id,
+              p.nombre,
+              p.tipo_cuarto,
+              COALESCE(pd.cant_sala,             0)  AS cant_sala,
+              COALESCE(pd.cant_tienda,           0)  AS cant_tienda,
+              COALESCE(pd.cant_marley,           0)  AS cant_marley,
+              COALESCE(pd.cantidad_planificada,  0)  AS cantidad_planificada,
+              pr.cantidad_real,
+              pr.mermas,
+              COALESCE(c.nombre,                '')  AS cocinero,
+              COALESCE(pr.comentarios,          '')  AS comentarios
+         FROM produccion_real pr
+         JOIN productos p ON pr.plu_id = p.plu_id
+         LEFT JOIN planificacion_diaria pd
+           ON pd.plu_id = pr.plu_id AND pd.fecha = pr.fecha
+         LEFT JOIN cocineros c ON c.id = pr.cocinero_id
+        WHERE pr.fecha BETWEEN ? AND ?
+        ORDER BY pr.fecha ASC, p.tipo_cuarto DESC, p.nombre ASC`,
+      [desde, hasta]
+    );
+
+    const workbook  = new ExcelJS.Workbook();
+    workbook.creator = 'Kitchen Manager';
+    const sheet = workbook.addWorksheet('Producción', {
+      views: [{ state: 'frozen', ySplit: 1 }],
+    });
+
+    sheet.columns = [
+      { header: 'Fecha',        key: 'fecha',                width: 14 },
+      { header: 'PLU',          key: 'plu_id',               width: 10 },
+      { header: 'Producto',     key: 'nombre',               width: 34 },
+      { header: 'Cuarto',       key: 'tipo_cuarto',          width: 12 },
+      { header: 'Plan Sala',    key: 'cant_sala',            width: 12 },
+      { header: 'Plan Tienda',  key: 'cant_tienda',          width: 14 },
+      { header: 'Plan Marley',  key: 'cant_marley',          width: 14 },
+      { header: 'Planificado',  key: 'cantidad_planificada', width: 14 },
+      { header: 'Real',         key: 'cantidad_real',        width: 10 },
+      { header: 'Mermas',       key: 'mermas',               width: 10 },
+      { header: 'Cocinero',     key: 'cocinero',             width: 22 },
+      { header: 'Comentarios',  key: 'comentarios',          width: 32 },
+    ];
+
+    // Estilo de cabecera
+    const headerRow = sheet.getRow(1);
+    headerRow.font  = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Filas de datos con formato de fecha legible
+    rows.forEach((r, i) => {
+      const row = sheet.addRow({
+        ...r,
+        fecha: r.fecha instanceof Date
+          ? r.fecha.toISOString().slice(0, 10)
+          : String(r.fecha).slice(0, 10),
+      });
+      // Filas alternadas
+      if (i % 2 === 1) {
+        row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+      }
+    });
+
+    const filename = `produccion_${desde}_${hasta}.xlsx`;
+    res.setHeader('Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
   } catch (e) { err500(res, e); }
 });
 

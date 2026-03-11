@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📊 Informes – Kitchen Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 min-h-screen text-white p-4 md:p-8">
+
+  <!-- ── HEADER ── -->
+  <header class="flex flex-wrap items-center gap-4 mb-8 max-w-2xl mx-auto">
+    <a href="/"
+       class="flex items-center justify-center w-10 h-10 rounded-xl
+              bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white
+              transition-colors text-xl font-bold shrink-0">&#8592;</a>
+    <div class="flex-1 min-w-0">
+      <h1 class="text-3xl md:text-4xl font-black">&#128202; Informes</h1>
+      <p class="text-gray-500 text-sm mt-0.5" id="fecha-hoy"></p>
+    </div>
+  </header>
+
+  <!-- ── TARJETA PRINCIPAL ── -->
+  <main class="max-w-2xl mx-auto space-y-6">
+
+    <!-- REPORTE EXCEL -->
+    <div class="bg-gray-900 border border-gray-700 rounded-3xl p-8 space-y-6 shadow-2xl">
+
+      <!-- Encabezado tarjeta -->
+      <div class="flex items-center gap-4 border-b border-gray-700 pb-5">
+        <div class="flex items-center justify-center w-14 h-14 rounded-2xl
+                    bg-emerald-900/60 border border-emerald-700/50 text-3xl shrink-0">
+          &#128196;
+        </div>
+        <div>
+          <h2 class="text-xl font-black leading-tight">Reporte de Producción en Excel</h2>
+          <p class="text-gray-500 text-sm mt-0.5">
+            Selecciona un rango de fechas y descarga un <strong class="text-white">.xlsx</strong>
+            con todo lo producido, mermado y quién lo cocinó.
+          </p>
+        </div>
+      </div>
+
+      <!-- Inputs de fechas -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div>
+          <label for="rpt-desde"
+                 class="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
+            &#128197; Fecha Inicio
+          </label>
+          <input type="date" id="rpt-desde"
+                 class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3
+                        text-white font-bold text-base
+                        focus:outline-none focus:border-emerald-500 transition-colors
+                        cursor-pointer" />
+        </div>
+        <div>
+          <label for="rpt-hasta"
+                 class="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">
+            &#128197; Fecha Fin
+          </label>
+          <input type="date" id="rpt-hasta"
+                 class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3
+                        text-white font-bold text-base
+                        focus:outline-none focus:border-emerald-500 transition-colors
+                        cursor-pointer" />
+        </div>
+      </div>
+
+      <!-- Botón descarga -->
+      <button id="btn-descargar" onclick="descargarExcel()"
+              class="w-full bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800
+                     text-white font-black py-5 rounded-2xl text-xl
+                     transition-all tracking-widest shadow-lg shadow-emerald-900/50
+                     flex items-center justify-center gap-3">
+        <span id="btn-icon">&#11015;&#65039;</span>
+        <span id="btn-text">DESCARGAR EXCEL</span>
+      </button>
+
+      <!-- Toast de estado -->
+      <div id="toast-excel" class="hidden text-center py-3 px-5 rounded-xl font-semibold text-sm"></div>
+
+      <!-- Ayuda -->
+      <p class="text-gray-600 text-xs text-center leading-relaxed">
+        El archivo incluye: fecha, PLU, producto, cuarto, planificado por destino,
+        cantidad real, mermas, cocinero y comentarios.
+      </p>
+    </div>
+
+    <!-- TARJETA ACCESOS RÁPIDOS -->
+    <div class="bg-gray-900 border border-gray-700/50 rounded-3xl p-6">
+      <p class="text-gray-500 text-xs font-bold uppercase tracking-widest mb-4">Accesos rápidos</p>
+      <div class="grid grid-cols-2 gap-3">
+        <a href="/registro.html"
+           class="flex flex-col items-center justify-center gap-2 py-4
+                  bg-orange-900/40 hover:bg-orange-900/70 border border-orange-800/50
+                  rounded-2xl transition-colors text-center">
+          <span class="text-2xl">&#127859;</span>
+          <span class="text-xs font-bold text-orange-300">Registro</span>
+        </a>
+        <a href="/planificacion.html"
+           class="flex flex-col items-center justify-center gap-2 py-4
+                  bg-blue-900/40 hover:bg-blue-900/70 border border-blue-800/50
+                  rounded-2xl transition-colors text-center">
+          <span class="text-2xl">&#128203;</span>
+          <span class="text-xs font-bold text-blue-300">Planificación</span>
+        </a>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // ── Fecha de hoy ──────────────────────────────────────────────────────────
+    const today = new Date().toISOString().slice(0, 10);
+    document.getElementById('fecha-hoy').textContent =
+      new Date().toLocaleDateString('es-PE', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      });
+
+    // Inicializa con el mes en curso (primer y último día)
+    const primerDiaMes = today.slice(0, 8) + '01';
+    document.getElementById('rpt-desde').value = primerDiaMes;
+    document.getElementById('rpt-hasta').value = today;
+
+    // ── Helpers toast ─────────────────────────────────────────────────────────
+    const TOAST_CLASSES = {
+      info  : 'text-center py-3 px-5 rounded-xl font-semibold text-sm bg-gray-800 text-gray-300 border border-gray-600',
+      ok    : 'text-center py-3 px-5 rounded-xl font-semibold text-sm bg-green-900 text-green-300 border border-green-700',
+      error : 'text-center py-3 px-5 rounded-xl font-semibold text-sm bg-red-900 text-red-300 border border-red-700',
+    };
+
+    function showToast(msg, tipo = 'info', duracion = 5000) {
+      const el = document.getElementById('toast-excel');
+      el.className = TOAST_CLASSES[tipo];
+      el.textContent = msg;
+      clearTimeout(el._t);
+      if (duracion > 0) el._t = setTimeout(() => { el.className = 'hidden'; }, duracion);
+    }
+
+    // ── Función principal de descarga ─────────────────────────────────────────
+    async function descargarExcel() {
+      const desde = document.getElementById('rpt-desde').value;
+      const hasta = document.getElementById('rpt-hasta').value;
+
+      // Validaciones en el cliente
+      if (!desde || !hasta) {
+        showToast('⚠ Debes seleccionar fecha de inicio y fin.', 'error');
+        return;
+      }
+      if (desde > hasta) {
+        showToast('⚠ La fecha de inicio no puede ser posterior a la fecha fin.', 'error');
+        return;
+      }
+
+      // Estado de carga
+      const btn  = document.getElementById('btn-descargar');
+      const icon = document.getElementById('btn-icon');
+      const txt  = document.getElementById('btn-text');
+      btn.disabled  = true;
+      icon.textContent = '⏳';
+      txt.textContent  = 'GENERANDO...';
+      showToast('⏳ Consultando la base de datos, un momento...', 'info', 0);
+
+      try {
+        const response = await fetch(`/api/informes/excel?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({ error: 'Error desconocido del servidor.' }));
+          throw new Error(errData.error || `Error HTTP ${response.status}`);
+        }
+
+        // Forzar descarga sin abrir nueva pestaña
+        const blob     = await response.blob();
+        const url      = URL.createObjectURL(blob);
+        const anchor   = document.createElement('a');
+        anchor.href    = url;
+        anchor.download = `produccion_${desde}_${hasta}.xlsx`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+
+        showToast('✓ Archivo descargado correctamente.', 'ok');
+
+      } catch (e) {
+        showToast('✗ ' + e.message, 'error');
+      } finally {
+        btn.disabled     = false;
+        icon.textContent = '⬇️';
+        txt.textContent  = 'DESCARGAR EXCEL';
+      }
+    }
+  </script>
+</body>
+</html>

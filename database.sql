@@ -46,10 +46,31 @@ CREATE TABLE IF NOT EXISTS planificacion_diaria (
 
 
 -- ─────────────────────────────────────────────────────────────
--- TABLA 3: produccion_real
---   Solo registra lo que los cocineros produjeron:
---   cantidad_real, mermas y comentarios.
---   La distribucion sala/tienda ya no es responsabilidad del cocinero.
+-- TABLA 3: cocineros
+--   Catálogo de cocineros del restaurante.
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS cocineros (
+  id     INT          NOT NULL AUTO_INCREMENT,
+  nombre VARCHAR(100) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_cocinero_nombre (nombre)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO cocineros (nombre) VALUES
+  ('Carlos'),
+  ('Luis'),
+  ('Javier'),
+  ('Diego'),
+  ('Andrés'),
+  ('Miguel'),
+  ('Felipe'),
+  ('Sebastián');
+
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLA 4: produccion_real
+--   Registra lo que los cocineros produjeron:
+--   cantidad_real, mermas, comentarios y referencia al cocinero.
 -- ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS produccion_real (
   id            INT           NOT NULL AUTO_INCREMENT,
@@ -58,14 +79,19 @@ CREATE TABLE IF NOT EXISTS produccion_real (
   cantidad_real INT           NOT NULL DEFAULT 0,
   mermas        INT           NOT NULL DEFAULT 0,
   comentarios   TEXT          NULL,
+  cocinero_id   INT           NULL DEFAULT NULL,
   registrado_en TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
                               ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_prod_fecha_plu (fecha, plu_id),
   CONSTRAINT fk_prod_producto
     FOREIGN KEY (plu_id) REFERENCES productos (plu_id)
-    ON DELETE CASCADE ON UPDATE CASCADE
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_prod_cocinero
+    FOREIGN KEY (cocinero_id) REFERENCES cocineros (id)
+    ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 
 -- ─────────────────────────────────────────────────────────────
@@ -177,14 +203,3 @@ INSERT IGNORE INTO productos (plu_id, nombre, tipo_cuarto) VALUES
 -- ─────────────────────────────────────────────────────────────
 -- MIGRACIONES (para bases de datos ya existentes)
 -- ─────────────────────────────────────────────────────────────
-ALTER TABLE planificacion_diaria
-  ADD COLUMN IF NOT EXISTS cant_sala    INT NOT NULL DEFAULT 0 AFTER plu_id,
-  ADD COLUMN IF NOT EXISTS cant_tienda  INT NOT NULL DEFAULT 0 AFTER cant_sala,
-  ADD COLUMN IF NOT EXISTS cant_marley  INT NOT NULL DEFAULT 0 AFTER cant_tienda;
-
-ALTER TABLE produccion_real
-  DROP COLUMN IF EXISTS cant_sala,
-  DROP COLUMN IF EXISTS cant_tienda;
-
-ALTER TABLE produccion_real
-  ADD COLUMN IF NOT EXISTS comentarios TEXT NULL AFTER mermas;
