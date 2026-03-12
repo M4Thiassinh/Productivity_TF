@@ -1,0 +1,8 @@
+Softwre teja food
+
+cambiar la palabra merma por no producido
+quitar la restricción si la suma de real + merma > a total
+en el kds, sea interactivo cuando se aprete un producto lo lleve altiro al registro de eses producto para guardar la información.
+cuando se guarde el registro de un producto que se elimine de la lista, o se note a simple vista que el producto ya esta preparado y finalizado,
+
+que el apartado de registro de producción, en vez de registrar sea una previsualización del Excel a descargar del dia de producción.
