@@ -204,8 +204,9 @@ app.get('/api/produccion', async (req, res) => {
     const [rows] = await pool.execute(
       `SELECT p.plu_id, p.nombre, p.tipo_cuarto,
               pd.cant_sala, pd.cant_tienda, pd.cant_marley, pd.cantidad_planificada,
+              pr.id AS registro_id,
               COALESCE(pr.cantidad_real, 0)  AS cantidad_real,
-              COALESCE(pr.mermas,        0)  AS mermas,
+              COALESCE(pr.no_producido,  0)  AS no_producido,
               COALESCE(pr.comentarios,   '') AS comentarios,
               pr.cocinero_id,
               COALESCE(c.nombre,         '') AS cocinero_nombre
@@ -223,51 +224,67 @@ app.get('/api/produccion', async (req, res) => {
   } catch (e) { err500(res, e); }
 });
 
-// POST /api/produccion
+// POST /api/produccion y /api/produccion_real
 //      Inserta o actualiza el registro de producción real de un ítem.
-//      VALIDA que cantidad_real + mermas no supere cantidad_planificada.
-app.post('/api/produccion', async (req, res) => {
-  const { fecha, plu_id, cantidad_real, mermas, comentarios, cocinero_id } = req.body;
+//      No bloquea por sobrepasar lo planificado.
+const guardarProduccion = async (req, res) => {
+  const { fecha, plu_id, cantidad_real, no_producido, comentarios, cocinero_id } = req.body;
   if (!fecha || !plu_id)
     return res.status(400).json({ error: 'fecha y plu_id son requeridos.' });
 
-  const real  = Number(cantidad_real) || 0;
-  const merma = Number(mermas)        || 0;
+  const real = Number(cantidad_real) || 0;
+  const noProducido = Number(no_producido) || 0;
 
   try {
-    // ── Validación contra lo planificado ──────────────────────────────
-    const [[plan]] = await pool.execute(
-      'SELECT cantidad_planificada FROM planificacion_diaria WHERE fecha = ? AND plu_id = ?',
-      [fecha, plu_id]
-    );
-    if (plan) {
-      const planificado = plan.cantidad_planificada || 0;
-      if ((real + merma) > planificado) {
-        return res.status(400).json({
-          error: `Real (${real}) + Mermas (${merma}) = ${real + merma} supera lo planificado (${planificado}).`,
-          planificado,
-          ingresado: real + merma,
-        });
-      }
-    }
-
-    // ── Persistir ──────────────────────────────────────────────────
     await pool.execute(
       `INSERT INTO produccion_real
-              (fecha, plu_id, cantidad_real, mermas, comentarios, cocinero_id)
+              (fecha, plu_id, cantidad_real, no_producido, comentarios, cocinero_id)
             VALUES (?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
               cantidad_real = VALUES(cantidad_real),
-              mermas        = VALUES(mermas),
+              no_producido  = VALUES(no_producido),
               comentarios   = VALUES(comentarios),
               cocinero_id   = VALUES(cocinero_id)`,
       [
-        fecha, plu_id, real, merma,
+        fecha,
+        plu_id,
+        real,
+        noProducido,
         (comentarios || '').trim(),
-        cocinero_id  || null,
+        cocinero_id || null,
       ]
     );
     res.json({ success: true });
+  } catch (e) { err500(res, e); }
+};
+
+app.post('/api/produccion', guardarProduccion);
+app.post('/api/produccion_real', guardarProduccion);
+
+// GET /api/resumen_diario?fecha=YYYY-MM-DD
+//     Resumen consolidado para la pantalla de previsualización.
+app.get('/api/resumen_diario', async (req, res) => {
+  const fecha = req.query.fecha || new Date().toISOString().slice(0, 10);
+  try {
+    const [rows] = await pool.execute(
+      `SELECT p.plu_id,
+              p.nombre,
+              COALESCE(SUM(pd.cant_sala), 0)            AS total_sala,
+              COALESCE(SUM(pd.cant_tienda), 0)          AS total_tienda,
+              COALESCE(SUM(pd.cant_marley), 0)          AS total_marley,
+              COALESCE(SUM(pd.cantidad_planificada), 0) AS total_planeado,
+              COALESCE(SUM(pr.cantidad_real), 0)        AS total_real,
+              COALESCE(SUM(pr.no_producido), 0)         AS total_no_producido
+         FROM planificacion_diaria pd
+         JOIN productos p ON p.plu_id = pd.plu_id
+         LEFT JOIN produccion_real pr
+           ON pr.plu_id = pd.plu_id AND pr.fecha = pd.fecha
+        WHERE pd.fecha = ?
+        GROUP BY p.plu_id, p.nombre
+        ORDER BY p.nombre`,
+      [fecha]
+    );
+    res.json(rows);
   } catch (e) { err500(res, e); }
 });
 
@@ -275,17 +292,18 @@ app.post('/api/produccion', async (req, res) => {
 //  INFORMES
 // ══════════════════════════════════════════════════════════════
 
-// GET /api/informes/excel?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
-//     Descarga un .xlsx con toda la producción y mermas del rango.
+// GET /api/informes/excel?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
+//     Descarga un .xlsx con toda la producción y no producido del rango.
 app.get('/api/informes/excel', async (req, res) => {
-  const { desde, hasta } = req.query;
+  const fecha_inicio = req.query.fecha_inicio || req.query.desde;
+  const fecha_fin    = req.query.fecha_fin    || req.query.hasta;
 
   // Validación de formato para evitar valores inesperados
   const fechaRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!desde || !hasta || !fechaRegex.test(desde) || !fechaRegex.test(hasta))
-    return res.status(400).json({ error: 'Parámetros desde y hasta requeridos (formato YYYY-MM-DD).' });
-  if (desde > hasta)
-    return res.status(400).json({ error: '"desde" no puede ser posterior a "hasta".' });
+  if (!fecha_inicio || !fecha_fin || !fechaRegex.test(fecha_inicio) || !fechaRegex.test(fecha_fin))
+    return res.status(400).json({ error: 'Parámetros fecha_inicio y fecha_fin requeridos (formato YYYY-MM-DD).' });
+  if (fecha_inicio > fecha_fin)
+    return res.status(400).json({ error: '"fecha_inicio" no puede ser posterior a "fecha_fin".' });
 
   try {
     const [rows] = await pool.execute(
@@ -298,7 +316,7 @@ app.get('/api/informes/excel', async (req, res) => {
               COALESCE(pd.cant_marley,           0)  AS cant_marley,
               COALESCE(pd.cantidad_planificada,  0)  AS cantidad_planificada,
               pr.cantidad_real,
-              pr.mermas,
+                  pr.no_producido,
               COALESCE(c.nombre,                '')  AS cocinero,
               COALESCE(pr.comentarios,          '')  AS comentarios
          FROM produccion_real pr
@@ -308,7 +326,7 @@ app.get('/api/informes/excel', async (req, res) => {
          LEFT JOIN cocineros c ON c.id = pr.cocinero_id
         WHERE pr.fecha BETWEEN ? AND ?
         ORDER BY pr.fecha ASC, p.tipo_cuarto DESC, p.nombre ASC`,
-      [desde, hasta]
+      [fecha_inicio, fecha_fin]
     );
 
     const workbook  = new ExcelJS.Workbook();
@@ -327,7 +345,7 @@ app.get('/api/informes/excel', async (req, res) => {
       { header: 'Plan Marley',  key: 'cant_marley',          width: 14 },
       { header: 'Planificado',  key: 'cantidad_planificada', width: 14 },
       { header: 'Real',         key: 'cantidad_real',        width: 10 },
-      { header: 'Mermas',       key: 'mermas',               width: 10 },
+      { header: 'No Producido', key: 'no_producido',         width: 14 },
       { header: 'Cocinero',     key: 'cocinero',             width: 22 },
       { header: 'Comentarios',  key: 'comentarios',          width: 32 },
     ];
@@ -352,7 +370,7 @@ app.get('/api/informes/excel', async (req, res) => {
       }
     });
 
-    const filename = `produccion_${desde}_${hasta}.xlsx`;
+    const filename = `produccion_${fecha_inicio}_${fecha_fin}.xlsx`;
     res.setHeader('Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

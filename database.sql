@@ -70,14 +70,14 @@ INSERT IGNORE INTO cocineros (nombre) VALUES
 -- ─────────────────────────────────────────────────────────────
 -- TABLA 4: produccion_real
 --   Registra lo que los cocineros produjeron:
---   cantidad_real, mermas, comentarios y referencia al cocinero.
+--   cantidad_real, no_producido, comentarios y referencia al cocinero.
 -- ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS produccion_real (
   id            INT           NOT NULL AUTO_INCREMENT,
   fecha         DATE          NOT NULL,
   plu_id        VARCHAR(20)   NOT NULL,
   cantidad_real INT           NOT NULL DEFAULT 0,
-  mermas        INT           NOT NULL DEFAULT 0,
+  no_producido  INT           NOT NULL DEFAULT 0,
   comentarios   TEXT          NULL,
   cocinero_id   INT           NULL DEFAULT NULL,
   registrado_en TIMESTAMP     DEFAULT CURRENT_TIMESTAMP

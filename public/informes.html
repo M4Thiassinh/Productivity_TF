@@ -36,7 +36,7 @@
           <h2 class="text-xl font-black leading-tight">Reporte de Producción en Excel</h2>
           <p class="text-gray-500 text-sm mt-0.5">
             Selecciona un rango de fechas y descarga un <strong class="text-white">.xlsx</strong>
-            con todo lo producido, mermado y quién lo cocinó.
+            con todo lo producido, no producido y quién lo cocinó.
           </p>
         </div>
       </div>
@@ -83,7 +83,7 @@
       <!-- Ayuda -->
       <p class="text-gray-600 text-xs text-center leading-relaxed">
         El archivo incluye: fecha, PLU, producto, cuarto, planificado por destino,
-        cantidad real, mermas, cocinero y comentarios.
+        cantidad real, no producido, cocinero y comentarios.
       </p>
     </div>
 
@@ -163,7 +163,7 @@
       showToast('⏳ Consultando la base de datos, un momento...', 'info', 0);
 
       try {
-        const response = await fetch(`/api/informes/excel?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+        const response = await fetch(`/api/informes/excel?fecha_inicio=${encodeURIComponent(desde)}&fecha_fin=${encodeURIComponent(hasta)}`);
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({ error: 'Error desconocido del servidor.' }));

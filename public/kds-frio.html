@@ -3,39 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>❄️ KDS – Cuarto Frío</title>
+  <title>KDS Cuarto Frío</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.35; }
-    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
     .blink { animation: blink 0.8s ease-in-out infinite; }
   </style>
 </head>
-<body class="bg-gray-950 min-h-screen p-4 md:p-8">
-
-  <!-- ── HEADER ── -->
-  <header class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
+<body class="bg-gray-950 h-screen overflow-hidden p-3 md:p-4">
+  <header class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
     <div class="flex items-center gap-4">
-      <a href="/"
-         class="flex items-center justify-center w-10 h-10 rounded-xl
-                bg-gray-900 hover:bg-gray-800 text-gray-600 hover:text-white
-                transition-colors text-xl font-bold shrink-0">
-        ←
-      </a>
+      <a href="/" class="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-900 hover:bg-gray-800 text-gray-600 hover:text-white transition-colors text-xl font-bold shrink-0">←</a>
       <div>
-        <!-- Ícono + título -->
         <div class="flex items-center gap-3">
           <span class="text-4xl">❄️</span>
-          <h1 class="text-3xl md:text-5xl font-black text-sky-300 tracking-tight">
-            KDS – CUARTO FRÍO
-          </h1>
+          <h1 class="text-3xl md:text-5xl font-black text-sky-300 tracking-tight">KDS - CUARTO FRIO</h1>
         </div>
         <p class="text-gray-600 text-sm ml-1" id="fecha-display"></p>
       </div>
     </div>
-    <!-- Contador -->
     <div class="flex items-center gap-4 sm:text-right">
       <div class="text-right">
         <div class="text-xs text-gray-600 uppercase tracking-wider">Última actualización</div>
@@ -48,108 +34,214 @@
     </div>
   </header>
 
-  <!-- Banda de color identificadora -->
-  <div class="w-full h-1 bg-sky-600 rounded-full mb-8 opacity-60"></div>
+  <div class="w-full h-1 bg-sky-600 rounded-full mb-4 opacity-60"></div>
+  <main id="kds-root" class="h-[calc(100vh-170px)] overflow-hidden"></main>
 
-  <!-- Banner vacío -->
-  <div id="banner-estado" class="hidden mb-6 text-center py-4 rounded-2xl font-bold text-xl"></div>
-
-  <!-- Contenido -->
-  <main id="kds-root">
-    <div class="flex items-center justify-center h-64">
-      <p class="text-gray-600 text-2xl animate-pulse">⏳ Cargando planificación…</p>
+  <datalist id="lista-cocineros"></datalist>
+  <div id="modal-overlay" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-40"></div>
+  <div id="modal-registro" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="w-full max-w-xl rounded-3xl border border-gray-700 bg-gray-900 shadow-2xl">
+      <div class="px-6 py-5 border-b border-gray-700 flex items-start justify-between gap-4">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-widest text-gray-500" id="modal-plu"></p>
+          <h2 class="text-2xl font-black text-white leading-tight" id="modal-nombre"></h2>
+          <p class="text-sm text-gray-400 mt-1" id="modal-plan"></p>
+        </div>
+        <button onclick="cerrarModal()" class="w-9 h-9 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300">✕</button>
+      </div>
+      <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="sm:col-span-2">
+          <label class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1.5 block">Cocinero</label>
+          <input id="modal-cocinero" list="lista-cocineros" type="text" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white font-bold text-base focus:outline-none focus:border-violet-500" />
+        </div>
+        <div>
+          <label class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1.5 block">Cantidad Real</label>
+          <input id="modal-real" type="number" min="0" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white font-bold text-base focus:outline-none focus:border-orange-500" />
+        </div>
+        <div>
+          <label class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1.5 block">No Producido</label>
+          <input id="modal-no-producido" type="number" min="0" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white font-bold text-base focus:outline-none focus:border-yellow-500" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1.5 block">Comentarios</label>
+          <input id="modal-comentarios" type="text" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-base focus:outline-none focus:border-gray-500" />
+        </div>
+      </div>
+      <div class="px-6 pb-6 flex items-center justify-end gap-3">
+        <span id="modal-msg" class="text-sm font-semibold text-gray-400 mr-auto"></span>
+        <button onclick="cerrarModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold">Cancelar</button>
+        <button id="btn-modal-guardar" onclick="guardarModal()" class="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-black">Guardar</button>
+      </div>
     </div>
-  </main>
+  </div>
 
   <script>
     const REFRESH_INTERVAL = 30;
     const today = new Date().toISOString().slice(0, 10);
-    // ── Este KDS filtra SOLO el cuarto Frío ──
-    const TIPO_CUARTO = 'Frío';
+    const TIPO = 'Frío';
 
-    document.getElementById('fecha-display').textContent =
-      new Date().toLocaleDateString('es-PE', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-      });
+    let segundos = 0;
+    let cocineros = [];
+    let itemsKds = [];
+    let modalItem = null;
 
-    let secondsLeft = 0;
+    document.getElementById('fecha-display').textContent = new Date().toLocaleDateString('es-PE', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
 
-    function tickContador() {
+    function renderCard(item, size) {
+      const done = !!item.registro_id;
+      return `
+        <button onclick="abrirModal('${item.plu_id}')" class="w-full h-full text-left border-2 rounded-2xl ${size.pad} transition-all hover:brightness-110 overflow-hidden ${done ? 'border-emerald-600 bg-emerald-950/40' : 'border-sky-700 bg-gray-900'}">
+          <div class="flex items-start justify-between gap-3">
+            <span class="inline-block text-xs font-mono px-2 py-0.5 rounded-full ${done ? 'bg-emerald-900 text-emerald-300' : 'bg-sky-900 text-sky-300'}">${item.plu_id}</span>
+            ${done ? '<span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-emerald-900 text-emerald-300">✓ Preparado</span>' : '<span class="text-xs font-bold text-gray-500">Pendiente</span>'}
+          </div>
+          <h3 class="${done ? 'line-through text-emerald-100' : 'text-white'} ${size.title} font-black leading-tight mt-2 mb-3 line-clamp-2">${item.nombre}</h3>
+          <div class="flex items-end justify-between">
+            <span class="text-gray-500 ${size.label}">Planificada</span>
+            <span class="${done ? 'text-emerald-300' : 'text-sky-300'} ${size.num} font-black leading-none tabular-nums">${item.cantidad_planificada}</span>
+          </div>
+        </button>`;
+    }
+
+    function getSizeProfile(total) {
+      if (total >= 20) return { pad: 'p-3', title: 'text-base', num: 'text-3xl', label: 'text-xs' };
+      if (total >= 12) return { pad: 'p-4', title: 'text-lg', num: 'text-4xl', label: 'text-xs' };
+      return { pad: 'p-5', title: 'text-2xl', num: 'text-6xl', label: 'text-sm' };
+    }
+
+    function buildGridLayout(total) {
+      const minCard = 220;
+      const width = Math.max(320, window.innerWidth - 48);
+      const cols = Math.max(1, Math.floor(width / minCard));
+      const rows = Math.max(1, Math.ceil(total / cols));
+      return { cols, rows };
+    }
+
+    function render() {
+      const root = document.getElementById('kds-root');
+      if (!itemsKds.length) {
+        root.innerHTML = '<div class="text-center py-20 text-gray-500 text-xl">Sin planificación activa en Cuarto Frío para hoy</div>';
+        return;
+      }
+
+      // Pendientes primero, completados al final
+      const ordenados = [...itemsKds].sort((a, b) => Number(!!a.registro_id) - Number(!!b.registro_id));
+      const size = getSizeProfile(ordenados.length);
+      const { cols, rows } = buildGridLayout(ordenados.length);
+
+      root.innerHTML = `
+        <div class="grid h-full gap-3"
+             style="grid-template-columns: repeat(${cols}, minmax(0, 1fr)); grid-template-rows: repeat(${rows}, minmax(0, 1fr));">
+          ${ordenados.map(i => renderCard(i, size)).join('')}
+        </div>`;
+    }
+
+    async function cargarCocineros() {
+      try {
+        const res = await fetch('/api/cocineros');
+        cocineros = await res.json();
+        document.getElementById('lista-cocineros').innerHTML = cocineros.map(c => `<option value="${c.nombre}"></option>`).join('');
+      } catch {
+        cocineros = [];
+      }
+    }
+
+    async function cargarKDS() {
+      try {
+        const res = await fetch(`/api/produccion?fecha=${today}`);
+        const data = await res.json();
+        itemsKds = Array.isArray(data)
+          ? data.filter(i => (i.tipo_cuarto === TIPO || i.tipo_cuarto === 'Frio') && Number(i.cantidad_planificada || 0) > 0)
+          : [];
+        document.getElementById('ultima-act').textContent = new Date().toLocaleTimeString('es-PE');
+        render();
+      } catch {
+        document.getElementById('kds-root').innerHTML = `<div class="text-center py-20"><p class="text-red-500 text-2xl font-bold">Error de conexión al servidor</p></div>`;
+      }
+    }
+
+    function abrirModal(plu_id) {
+      modalItem = itemsKds.find(i => i.plu_id === plu_id);
+      if (!modalItem) return;
+      document.getElementById('modal-plu').textContent = `PLU ${modalItem.plu_id}`;
+      document.getElementById('modal-nombre').textContent = modalItem.nombre;
+      document.getElementById('modal-plan').textContent = `Planificado: ${modalItem.cantidad_planificada}`;
+      document.getElementById('modal-real').value = Number(modalItem.cantidad_real || 0);
+      document.getElementById('modal-no-producido').value = Number(modalItem.no_producido || 0);
+      document.getElementById('modal-comentarios').value = modalItem.comentarios || '';
+      document.getElementById('modal-cocinero').value = modalItem.cocinero_nombre || '';
+      document.getElementById('modal-msg').textContent = '';
+      document.getElementById('modal-overlay').classList.remove('hidden');
+      document.getElementById('modal-registro').classList.remove('hidden');
+    }
+
+    function cerrarModal() {
+      document.getElementById('modal-overlay').classList.add('hidden');
+      document.getElementById('modal-registro').classList.add('hidden');
+      modalItem = null;
+    }
+
+    async function guardarModal() {
+      if (!modalItem) return;
+      const real = Number(document.getElementById('modal-real').value) || 0;
+      const noProducido = Number(document.getElementById('modal-no-producido').value) || 0;
+      const comentarios = document.getElementById('modal-comentarios').value.trim();
+      const cocineroNom = document.getElementById('modal-cocinero').value.trim();
+      const cocineroObj = cocineros.find(c => c.nombre.toLowerCase() === cocineroNom.toLowerCase());
+      const cocinero_id = cocineroObj ? cocineroObj.id : null;
+
+      const btn = document.getElementById('btn-modal-guardar');
+      const msg = document.getElementById('modal-msg');
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+      try {
+        const res = await fetch('/api/produccion_real', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fecha: today, plu_id: modalItem.plu_id, cantidad_real: real, no_producido: noProducido, comentarios, cocinero_id }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'No se pudo guardar.');
+        modalItem.cantidad_real = real;
+        modalItem.no_producido = noProducido;
+        modalItem.comentarios = comentarios;
+        modalItem.cocinero_id = cocinero_id;
+        modalItem.cocinero_nombre = cocineroObj ? cocineroObj.nombre : '';
+        modalItem.registro_id = modalItem.registro_id || 1;
+        render();
+        msg.className = 'text-sm font-semibold text-emerald-400 mr-auto';
+        msg.textContent = 'Guardado correctamente.';
+        setTimeout(cerrarModal, 600);
+      } catch (e) {
+        msg.className = 'text-sm font-semibold text-red-400 mr-auto';
+        msg.textContent = e.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Guardar';
+      }
+    }
+
+    function tick() {
       const el = document.getElementById('countdown');
-      if (secondsLeft <= 0) { cargarKDS(); secondsLeft = REFRESH_INTERVAL; }
-      el.textContent = `${secondsLeft}s`;
-      if (secondsLeft <= 5) {
+      if (segundos <= 0) { cargarKDS(); segundos = REFRESH_INTERVAL; }
+      el.textContent = `${segundos}s`;
+      if (segundos <= 5) {
         el.classList.remove('text-sky-400');
         el.classList.add('text-red-400', 'blink');
       } else {
         el.classList.remove('text-red-400', 'blink');
         el.classList.add('text-sky-400');
       }
-      secondsLeft--;
+      segundos--;
     }
 
-    function renderCard(item) {
-      return `
-        <div class="bg-gray-900 border-2 border-sky-700
-                    rounded-2xl p-6 flex flex-col justify-between
-                    hover:brightness-110 transition-all">
-          <div>
-            <span class="inline-block text-xs font-mono px-2 py-0.5 rounded-full mb-3
-                         bg-sky-900 text-sky-300">
-              ${item.plu_id}
-            </span>
-            <h3 class="text-white text-2xl md:text-3xl font-black leading-tight mb-6">
-              ${item.nombre}
-            </h3>
-          </div>
-          <div class="flex items-end justify-between">
-            <span class="text-gray-500 text-sm">Cantidad planificada</span>
-            <span class="text-sky-300 text-7xl font-black leading-none tabular-nums">
-              ${item.cantidad_planificada}
-            </span>
-          </div>
-        </div>`;
-    }
-
-    async function cargarKDS() {
-      try {
-        const res   = await fetch(
-          `/api/planificacion/kds?fecha=${today}&tipo=${encodeURIComponent(TIPO_CUARTO)}`
-        );
-        const items = await res.json();
-        document.getElementById('ultima-act').textContent =
-          new Date().toLocaleTimeString('es-PE');
-
-        const root   = document.getElementById('kds-root');
-        const banner = document.getElementById('banner-estado');
-
-        if (!Array.isArray(items) || items.length === 0) {
-          banner.className =
-            'mb-6 text-center py-4 rounded-2xl font-bold text-xl ' +
-            'bg-gray-900 text-gray-500 border border-gray-800';
-          banner.textContent = '❄️ Sin planificación activa en Cuarto Frío para hoy';
-          banner.classList.remove('hidden');
-          root.innerHTML = '';
-          return;
-        }
-
-        banner.classList.add('hidden');
-        root.innerHTML = `
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            ${items.map(renderCard).join('')}
-          </div>`;
-
-      } catch {
-        document.getElementById('kds-root').innerHTML = `
-          <div class="text-center py-20">
-            <p class="text-red-500 text-2xl font-bold">❌ Error de conexión al servidor</p>
-            <p class="text-gray-600 mt-2 text-sm">Reintentando en ${REFRESH_INTERVAL} segundos…</p>
-          </div>`;
-      }
-    }
-
-    setInterval(tickContador, 1000);
-    tickContador();
+    document.getElementById('modal-overlay').addEventListener('click', cerrarModal);
+    cargarCocineros();
+    setInterval(tick, 1000);
+    tick();
+    window.addEventListener('resize', render);
   </script>
 </body>
 </html>
