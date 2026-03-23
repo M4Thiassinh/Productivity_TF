@@ -3,75 +3,135 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KDS Interactivo</title>
+  <title>📺 KDS - Todos los Cuartos</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.35; }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
     }
-    .blink { animation: blink 0.8s ease-in-out infinite; }
+    .en-preparacion {
+      animation: pulse 2s ease-in-out infinite;
+    }
   </style>
 </head>
-<body class="bg-gray-950 min-h-screen p-4 md:p-8">
-  <header class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
-    <div class="flex items-center gap-4">
-      <a href="/" class="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-900 hover:bg-gray-800 text-gray-600 hover:text-white transition-colors text-xl font-bold shrink-0">←</a>
-      <div>
-        <h1 class="text-3xl md:text-4xl font-black text-white tracking-tight">KDS Interactivo</h1>
-        <p class="text-gray-500 text-sm" id="fecha-display"></p>
+<body class="bg-gray-950 min-h-screen p-3 md:p-6">
+
+  <!-- HEADER SIN BOTÓN DE VOLVER -->
+  <header class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
+    <div>
+      <h1 class="text-2xl md:text-4xl font-black text-white tracking-tight">📺 KDS - Todos los Cuartos</h1>
+      <p class="text-gray-500 text-xs md:text-sm" id="fecha-display"></p>
+    </div>
+
+    <!-- MÉTRICAS GLOBALES DEL CUARTO -->
+    <div class="bg-gradient-to-br from-violet-900/40 to-purple-800/20 border-2 border-violet-600 rounded-2xl px-4 py-3 md:px-6 md:py-4">
+      <div class="text-xs text-violet-400 font-bold uppercase tracking-wider mb-1">Producción Total</div>
+      <div class="flex items-baseline gap-2">
+        <span class="text-3xl md:text-4xl font-black text-violet-300" id="total-producido">0</span>
+        <span class="text-xl text-violet-500 font-bold">/</span>
+        <span class="text-2xl md:text-3xl font-black text-white" id="total-planificado">0</span>
+      </div>
+      <div class="mt-1">
+        <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
+          <div id="barra-progreso" class="h-full bg-gradient-to-r from-violet-500 to-purple-400 transition-all duration-500" style="width: 0%"></div>
+        </div>
       </div>
     </div>
-    <div class="flex items-center gap-4 sm:text-right">
+
+    <div class="flex items-center gap-3">
       <div class="text-right">
-        <div class="text-xs text-gray-600 uppercase tracking-wider">Última actualización</div>
-        <div class="text-gray-400 font-mono text-sm" id="ultima-act">—</div>
+        <div class="text-xs text-gray-600 uppercase">Última actualización</div>
+        <div class="text-gray-400 font-mono text-xs md:text-sm" id="ultima-act">—</div>
       </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-2xl px-5 py-3 text-center">
-        <div class="text-4xl font-black font-mono text-emerald-400" id="countdown">30s</div>
-        <div class="text-gray-600 text-xs mt-0.5">próxima recarga</div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl px-3 py-2 text-center">
+        <div class="text-2xl md:text-4xl font-black font-mono text-emerald-400" id="countdown">30s</div>
+        <div class="text-gray-600 text-xs">próxima recarga</div>
       </div>
     </div>
   </header>
 
-  <div id="banner-estado" class="hidden mb-6 text-center py-4 rounded-2xl font-bold text-xl"></div>
-  <main id="kds-root"></main>
+  <div id="banner-estado" class="hidden mb-4 text-center py-3 rounded-xl font-bold text-base"></div>
 
+  <!-- GRID MOBILE-FIRST: 1 columna en móvil, 2-3 en desktop -->
+  <main id="kds-root" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4"></main>
+
+  <!-- DATALIST COCINEROS -->
   <datalist id="lista-cocineros"></datalist>
 
-  <div id="modal-overlay" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-40"></div>
-  <div id="modal-registro" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div class="w-full max-w-xl rounded-3xl border border-gray-700 bg-gray-900 shadow-2xl">
-      <div class="px-6 py-5 border-b border-gray-700 flex items-start justify-between gap-4">
-        <div>
-          <p class="text-xs font-bold uppercase tracking-widest text-gray-500" id="modal-plu"></p>
-          <h2 class="text-2xl font-black text-white leading-tight" id="modal-nombre"></h2>
-          <p class="text-sm text-gray-400 mt-1" id="modal-plan"></p>
-        </div>
-        <button onclick="cerrarModal()" class="w-9 h-9 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300">✕</button>
+  <!-- MODAL INICIAR -->
+  <div id="modal-iniciar" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div class="w-full max-w-md bg-gray-900 border border-yellow-700 rounded-2xl shadow-2xl">
+      <div class="px-5 py-4 border-b border-yellow-700">
+        <h2 class="text-xl font-black text-yellow-400" id="modal-iniciar-nombre"></h2>
+        <p class="text-sm text-gray-400" id="modal-iniciar-envase"></p>
       </div>
-      <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div class="sm:col-span-2">
-          <label class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1.5 block">Cocinero</label>
-          <input id="modal-cocinero" list="lista-cocineros" type="text" autocomplete="off" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white font-bold text-base focus:outline-none focus:border-violet-500" />
-        </div>
+      <div class="p-5 text-center">
+        <p class="text-white text-lg mb-1">¿Iniciar preparación?</p>
+        <p class="text-gray-500 text-sm">Se registrará la hora de inicio.</p>
+      </div>
+      <div class="px-5 pb-5 flex gap-3">
+        <button onclick="cerrarModalIniciar()"
+                class="flex-1 px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-bold transition">
+          Cancelar
+        </button>
+        <button onclick="confirmarIniciar()"
+                class="flex-1 px-4 py-2 rounded-xl bg-yellow-600 hover:bg-yellow-500 text-white font-black transition">
+          Iniciar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL FINALIZAR -->
+  <div id="modal-finalizar" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div class="w-full max-w-lg bg-gray-900 border border-emerald-700 rounded-2xl shadow-2xl">
+      <div class="px-5 py-4 border-b border-emerald-700 flex justify-between items-start">
         <div>
-          <label class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1.5 block">Cantidad Real</label>
-          <input id="modal-real" type="number" min="0" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white font-bold text-base focus:outline-none focus:border-orange-500" />
+          <p class="text-xs font-bold uppercase text-gray-500" id="modal-finalizar-envase"></p>
+          <h2 class="text-xl font-black text-white" id="modal-finalizar-nombre"></h2>
+          <p class="text-sm text-gray-400 mt-1" id="modal-finalizar-plan"></p>
         </div>
+        <button onclick="cerrarModalFinalizar()"
+                class="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-lg">
+          ✕
+        </button>
+      </div>
+      <div class="p-5 space-y-3">
+        <!-- Cocinero -->
         <div>
-          <label class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1.5 block">No Producido</label>
-          <input id="modal-no-producido" type="number" min="0" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white font-bold text-base focus:outline-none focus:border-yellow-500" />
+          <label class="text-gray-400 text-xs font-bold uppercase block mb-1">Cocinero</label>
+          <input id="input-cocinero" list="lista-cocineros" type="text" autocomplete="off"
+                 class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-500" />
         </div>
-        <div class="sm:col-span-2">
-          <label class="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1.5 block">Comentarios</label>
-          <input id="modal-comentarios" type="text" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-base focus:outline-none focus:border-gray-500" />
+        <!-- Cantidad Real -->
+        <div>
+          <label class="text-gray-400 text-xs font-bold uppercase block mb-1">Cantidad Real Producida</label>
+          <input id="input-real" type="number" min="0"
+                 class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-lg font-bold focus:outline-none focus:border-emerald-500" />
+        </div>
+        <!-- No Producido -->
+        <div>
+          <label class="text-gray-400 text-xs font-bold uppercase block mb-1">Cantidad No Producida</label>
+          <input id="input-no-producido" type="number" min="0"
+                 class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-lg font-bold focus:outline-none focus:border-amber-500" />
+        </div>
+        <!-- Comentarios -->
+        <div>
+          <label class="text-gray-400 text-xs font-bold uppercase block mb-1">Comentarios</label>
+          <textarea id="input-comentarios" rows="3"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white resize-none focus:outline-none focus:border-gray-500"></textarea>
         </div>
       </div>
-      <div class="px-6 pb-6 flex items-center justify-end gap-3">
-        <span id="modal-msg" class="text-sm font-semibold text-gray-400 mr-auto"></span>
-        <button onclick="cerrarModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold">Cancelar</button>
-        <button id="btn-modal-guardar" onclick="guardarModal()" class="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-black">Guardar</button>
+      <div class="px-5 pb-5 flex gap-3">
+        <button onclick="cerrarModalFinalizar()"
+                class="flex-1 px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-bold transition">
+          Cancelar
+        </button>
+        <button onclick="confirmarFinalizar()"
+                class="flex-1 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-black transition">
+          Finalizar
+        </button>
       </div>
     </div>
   </div>
@@ -79,61 +139,101 @@
   <script>
     const REFRESH_INTERVAL = 30;
     const today = new Date().toISOString().slice(0, 10);
-
     let segundos = 0;
     let cocineros = [];
     let itemsKds = [];
-    let modalItem = null;
+    let itemActual = null;
 
     document.getElementById('fecha-display').textContent = new Date().toLocaleDateString('es-PE', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
 
-    function esFinalizado(item) {
-      return !!item.registro_id;
-    }
-
-    function estadoCard(item) {
-      if (esFinalizado(item)) {
+    // ══════════════════════════════════════════════════════════
+    //  FUNCIONES DE ESTADO
+    // ══════════════════════════════════════════════════════════
+    function estadoItem(item) {
+      // Listo: tiene hora_fin
+      if (item.hora_fin) {
         return {
+          estado: 'listo',
           card: 'border-emerald-600 bg-emerald-950/40',
           badge: 'bg-emerald-900 text-emerald-300',
-          num: 'text-emerald-300',
-          done: '<span class="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-emerald-900 text-emerald-300">✓ Preparado</span>',
-          titleCls: 'line-through text-emerald-100'
+          numClass: 'text-emerald-300',
+          badgeText: '✓ Listo',
+          clickable: false
         };
       }
+      // En Preparación: tiene hora_inicio pero no hora_fin
+      if (item.hora_inicio) {
+        return {
+          estado: 'en-preparacion',
+          card: 'border-yellow-600 bg-yellow-950/30 en-preparacion',
+          badge: 'bg-yellow-900 text-yellow-300',
+          numClass: 'text-yellow-300',
+          badgeText: '🔥 En Preparación',
+          clickable: true
+        };
+      }
+      // Pendiente: color según tipo de cuarto
+      const isPendiente = !item.hora_inicio;
       if (item.tipo_cuarto === 'Caliente') {
         return {
+          estado: 'pendiente',
           card: 'border-orange-700 bg-gray-900',
           badge: 'bg-orange-900 text-orange-300',
-          num: 'text-orange-300',
-          done: '<span class="text-xs font-bold text-gray-500">Pendiente</span>',
-          titleCls: 'text-white'
+          numClass: 'text-orange-300',
+          badgeText: 'Pendiente',
+          clickable: true
         };
       }
       return {
+        estado: 'pendiente',
         card: 'border-sky-700 bg-gray-900',
         badge: 'bg-sky-900 text-sky-300',
-        num: 'text-sky-300',
-        done: '<span class="text-xs font-bold text-gray-500">Pendiente</span>',
-        titleCls: 'text-white'
+        numClass: 'text-sky-300',
+        badgeText: 'Pendiente',
+        clickable: true
       };
     }
 
+    // ══════════════════════════════════════════════════════════
+    //  RENDER TARJETAS
+    // ══════════════════════════════════════════════════════════
     function renderCard(item) {
-      const s = estadoCard(item);
+      const s = estadoItem(item);
+      const envase = item.envase || 'Sin envase';
+      const division = `Tienda: ${item.cant_tienda} | Sala: ${item.cant_sala} | Marley: ${item.cant_marley}`;
+      const progreso = `${item.total_producido} / ${item.total_planificado}`;
+      const cuartoIcon = item.tipo_cuarto === 'Caliente' ? '🔥' : '❄️';
+
+      const cursorClass = s.clickable ? 'cursor-pointer hover:brightness-110' : 'opacity-70';
+      const onclickAttr = s.clickable ? `onclick="abrirModal('${item.plu_id}', '${s.estado}')"` : '';
+
       return `
-        <button onclick="abrirModal('${item.plu_id}')"
-                class="w-full text-left border-2 ${s.card} rounded-2xl p-6 transition-all hover:brightness-110">
-          <div class="flex items-start justify-between gap-3">
-            <span class="inline-block text-xs font-mono px-2 py-0.5 rounded-full ${s.badge}">${item.plu_id}</span>
-            ${s.done}
+        <button ${onclickAttr}
+                class="w-full text-left border-2 ${s.card} rounded-xl p-4 transition-all ${cursorClass}"
+                data-plu="${item.plu_id}">
+          <div class="flex items-start justify-between gap-2 mb-3">
+            <span class="inline-block text-xs font-bold px-2 py-1 rounded-full ${s.badge}">
+              ${s.badgeText}
+            </span>
+            <div class="text-right">
+              <div class="text-xs text-gray-500">${cuartoIcon} ${item.tipo_cuarto}</div>
+              <div class="text-lg font-black text-white">${envase}</div>
+            </div>
           </div>
-          <h3 class="${s.titleCls} text-2xl font-black leading-tight mt-3 mb-6">${item.nombre}</h3>
+          <h3 class="text-white text-lg md:text-xl font-black leading-tight mb-3">
+            ${item.nombre}
+          </h3>
+          <div class="text-xs text-gray-400 mb-2">${division}</div>
           <div class="flex items-end justify-between">
-            <span class="text-gray-500 text-sm">Cantidad planificada</span>
-            <span class="${s.num} text-6xl font-black leading-none tabular-nums">${item.cantidad_planificada}</span>
+            <div>
+              <div class="text-gray-500 text-xs">Progreso</div>
+              <div class="text-white font-bold text-sm">${progreso}</div>
+            </div>
+            <span class="${s.numClass} text-4xl md:text-5xl font-black leading-none">
+              ${item.total_planificado}
+            </span>
           </div>
         </button>`;
     }
@@ -143,167 +243,165 @@
       const banner = document.getElementById('banner-estado');
 
       if (!itemsKds.length) {
-        banner.className = 'mb-6 text-center py-4 rounded-2xl font-bold text-xl bg-gray-900 text-gray-500 border border-gray-800';
+        banner.className = 'mb-4 text-center py-3 rounded-xl font-bold text-base bg-gray-900 text-gray-500 border border-gray-800';
         banner.textContent = 'Sin planificación activa para hoy';
         banner.classList.remove('hidden');
         root.innerHTML = '';
+        actualizarMetricasGlobales(0, 0);
         return;
       }
 
       banner.classList.add('hidden');
-      const calientes = itemsKds.filter(i => i.tipo_cuarto === 'Caliente');
-      const frios = itemsKds.filter(i => i.tipo_cuarto === 'Frío' || i.tipo_cuarto === 'Frio');
+      root.innerHTML = itemsKds.map(renderCard).join('');
 
-      let html = '';
-      if (calientes.length) {
-        html += `
-          <section class="mb-10">
-            <div class="flex items-center gap-3 mb-5">
-              <span class="text-3xl">🔥</span>
-              <h2 class="text-3xl font-black text-orange-400 uppercase tracking-widest">Cuarto Caliente</h2>
-              <div class="flex-1 h-px bg-orange-900"></div>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">${calientes.map(renderCard).join('')}</div>
-          </section>`;
-      }
-      if (frios.length) {
-        html += `
-          <section>
-            <div class="flex items-center gap-3 mb-5">
-              <span class="text-3xl">❄️</span>
-              <h2 class="text-3xl font-black text-sky-400 uppercase tracking-widest">Cuarto Frío</h2>
-              <div class="flex-1 h-px bg-sky-900"></div>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">${frios.map(renderCard).join('')}</div>
-          </section>`;
-      }
-      root.innerHTML = html;
+      // Calcular métricas globales
+      const totales = itemsKds.reduce((acc, item) => {
+        acc.producido += item.total_producido || 0;
+        acc.planificado += item.total_planificado || 0;
+        return acc;
+      }, { producido: 0, planificado: 0 });
+
+      actualizarMetricasGlobales(totales.producido, totales.planificado);
     }
 
-    async function cargarCocineros() {
+    // ══════════════════════════════════════════════════════════
+    //  ACTUALIZAR MÉTRICAS GLOBALES
+    // ══════════════════════════════════════════════════════════
+    function actualizarMetricasGlobales(producido, planificado) {
+      document.getElementById('total-producido').textContent = producido;
+      document.getElementById('total-planificado').textContent = planificado;
+
+      // Calcular porcentaje para la barra de progreso
+      const porcentaje = planificado > 0 ? Math.round((producido / planificado) * 100) : 0;
+      document.getElementById('barra-progreso').style.width = porcentaje + '%';
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  MODAL INICIAR
+    // ══════════════════════════════════════════════════════════
+    function abrirModal(plu_id, estado) {
+      itemActual = itemsKds.find(i => i.plu_id === plu_id);
+      if (!itemActual) return;
+
+      if (estado === 'pendiente') {
+        document.getElementById('modal-iniciar-nombre').textContent = itemActual.nombre;
+        document.getElementById('modal-iniciar-envase').textContent = `Envase: ${itemActual.envase || 'N/A'}`;
+        document.getElementById('modal-iniciar').classList.remove('hidden');
+      } else if (estado === 'en-preparacion') {
+        document.getElementById('modal-finalizar-nombre').textContent = itemActual.nombre;
+        document.getElementById('modal-finalizar-envase').textContent = itemActual.envase || 'Sin envase';
+        document.getElementById('modal-finalizar-plan').textContent =
+          `Total planificado: ${itemActual.total_planificado} | Producido: ${itemActual.total_producido}`;
+        document.getElementById('input-real').value = '';
+        document.getElementById('input-no-producido').value = '';
+        document.getElementById('input-cocinero').value = '';
+        document.getElementById('input-comentarios').value = '';
+        document.getElementById('modal-finalizar').classList.remove('hidden');
+      }
+    }
+
+    function cerrarModalIniciar() {
+      document.getElementById('modal-iniciar').classList.add('hidden');
+      itemActual = null;
+    }
+
+    function cerrarModalFinalizar() {
+      document.getElementById('modal-finalizar').classList.add('hidden');
+      itemActual = null;
+    }
+
+    async function confirmarIniciar() {
+      if (!itemActual) return;
       try {
-        const res = await fetch('/api/cocineros');
-        cocineros = await res.json();
-        const dl = document.getElementById('lista-cocineros');
-        dl.innerHTML = cocineros.map(c => `<option value="${c.nombre}"></option>`).join('');
-      } catch {
-        cocineros = [];
-      }
-    }
-
-    async function cargarKDS() {
-      try {
-        const res = await fetch(`/api/produccion?fecha=${today}`);
-        const data = await res.json();
-        itemsKds = Array.isArray(data)
-          ? data.filter(i => Number(i.cantidad_planificada || 0) > 0)
-          : [];
-        document.getElementById('ultima-act').textContent = new Date().toLocaleTimeString('es-PE');
-        renderKDS();
-      } catch {
-        document.getElementById('kds-root').innerHTML = `
-          <div class="text-center py-20">
-            <p class="text-red-500 text-2xl font-bold">Error de conexión al servidor</p>
-            <p class="text-gray-600 mt-2 text-sm">Reintentando en ${REFRESH_INTERVAL} segundos...</p>
-          </div>`;
-      }
-    }
-
-    function abrirModal(plu_id) {
-      modalItem = itemsKds.find(i => i.plu_id === plu_id) || null;
-      if (!modalItem) return;
-
-      document.getElementById('modal-plu').textContent = `PLU ${modalItem.plu_id}`;
-      document.getElementById('modal-nombre').textContent = modalItem.nombre;
-      document.getElementById('modal-plan').textContent = `Planificado: ${modalItem.cantidad_planificada}`;
-      document.getElementById('modal-real').value = Number(modalItem.cantidad_real || 0);
-      document.getElementById('modal-no-producido').value = Number(modalItem.no_producido || 0);
-      document.getElementById('modal-comentarios').value = modalItem.comentarios || '';
-      document.getElementById('modal-cocinero').value = modalItem.cocinero_nombre || '';
-      document.getElementById('modal-msg').textContent = '';
-
-      document.getElementById('modal-overlay').classList.remove('hidden');
-      document.getElementById('modal-registro').classList.remove('hidden');
-    }
-
-    function cerrarModal() {
-      document.getElementById('modal-overlay').classList.add('hidden');
-      document.getElementById('modal-registro').classList.add('hidden');
-      modalItem = null;
-    }
-
-    async function guardarModal() {
-      if (!modalItem) return;
-
-      const real = Number(document.getElementById('modal-real').value) || 0;
-      const noProducido = Number(document.getElementById('modal-no-producido').value) || 0;
-      const comentarios = document.getElementById('modal-comentarios').value.trim();
-      const cocineroNom = document.getElementById('modal-cocinero').value.trim();
-      const cocineroObj = cocineros.find(c => c.nombre.toLowerCase() === cocineroNom.toLowerCase());
-      const cocinero_id = cocineroObj ? cocineroObj.id : null;
-
-      const btn = document.getElementById('btn-modal-guardar');
-      const msg = document.getElementById('modal-msg');
-      btn.disabled = true;
-      btn.textContent = 'Guardando...';
-
-      try {
-        const res = await fetch('/api/produccion_real', {
+        const res = await fetch('/api/produccion/iniciar', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fecha: today, plu_id: itemActual.plu_id })
+        });
+        const data = await res.json();
+        if (data.success) {
+          cerrarModalIniciar();
+          await cargarDatos();
+        } else {
+          alert('Error: ' + (data.error || 'No se pudo iniciar'));
+        }
+      } catch (e) {
+        alert('Error de conexión');
+      }
+    }
+
+    async function confirmarFinalizar() {
+      if (!itemActual) return;
+
+      const cantidad_real = parseInt(document.getElementById('input-real').value) || 0;
+      const no_producido = parseInt(document.getElementById('input-no-producido').value) || 0;
+      const cocineroNombre = document.getElementById('input-cocinero').value.trim();
+      const comentarios = document.getElementById('input-comentarios').value.trim();
+
+      // Buscar ID del cocinero
+      const cocinero = cocineros.find(c => c.nombre === cocineroNombre);
+      const cocinero_id = cocinero ? cocinero.id : null;
+
+      try {
+        const res = await fetch('/api/produccion/finalizar', {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             fecha: today,
-            plu_id: modalItem.plu_id,
-            cantidad_real: real,
-            no_producido: noProducido,
-            comentarios,
+            plu_id: itemActual.plu_id,
+            cantidad_real,
+            no_producido,
             cocinero_id,
-          }),
+            comentarios
+          })
         });
         const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.error || 'No se pudo guardar.');
-
-        modalItem.cantidad_real = real;
-        modalItem.no_producido = noProducido;
-        modalItem.comentarios = comentarios;
-        modalItem.cocinero_id = cocinero_id;
-        modalItem.cocinero_nombre = cocineroObj ? cocineroObj.nombre : '';
-        modalItem.registro_id = modalItem.registro_id || 1;
-        renderKDS();
-
-        msg.className = 'text-sm font-semibold text-emerald-400 mr-auto';
-        msg.textContent = 'Guardado correctamente.';
-        setTimeout(cerrarModal, 600);
+        if (data.success) {
+          cerrarModalFinalizar();
+          await cargarDatos();
+        } else {
+          alert('Error: ' + (data.error || 'No se pudo finalizar'));
+        }
       } catch (e) {
-        msg.className = 'text-sm font-semibold text-red-400 mr-auto';
-        msg.textContent = e.message;
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Guardar';
+        alert('Error de conexión');
       }
     }
 
-    function tick() {
-      const el = document.getElementById('countdown');
-      if (segundos <= 0) {
-        cargarKDS();
-        segundos = REFRESH_INTERVAL;
+    // ══════════════════════════════════════════════════════════
+    //  CARGAR DATOS
+    // ══════════════════════════════════════════════════════════
+    async function cargarDatos() {
+      try {
+        const [resKds, resCocineros] = await Promise.all([
+          fetch(`/api/planificacion/kds?fecha=${today}`),
+          fetch('/api/cocineros')
+        ]);
+        itemsKds = await resKds.json();
+        cocineros = await resCocineros.json();
+
+        // Llenar datalist
+        const datalist = document.getElementById('lista-cocineros');
+        datalist.innerHTML = cocineros.map(c => `<option value="${c.nombre}"></option>`).join('');
+
+        renderKDS();
+        document.getElementById('ultima-act').textContent = new Date().toLocaleTimeString('es-PE');
+      } catch (e) {
+        console.error(e);
       }
-      el.textContent = `${segundos}s`;
-      if (segundos <= 5) {
-        el.classList.remove('text-emerald-400');
-        el.classList.add('text-red-400', 'blink');
-      } else {
-        el.classList.remove('text-red-400', 'blink');
-        el.classList.add('text-emerald-400');
-      }
-      segundos--;
     }
 
-    document.getElementById('modal-overlay').addEventListener('click', cerrarModal);
-    cargarCocineros();
-    setInterval(tick, 1000);
-    tick();
+    // ══════════════════════════════════════════════════════════
+    //  COUNTDOWN Y AUTO-REFRESH
+    // ══════════════════════════════════════════════════════════
+    function updateCountdown() {
+      segundos = (segundos + 1) % REFRESH_INTERVAL;
+      const restantes = REFRESH_INTERVAL - segundos;
+      document.getElementById('countdown').textContent = restantes + 's';
+      if (segundos === 0) cargarDatos();
+    }
+
+    setInterval(updateCountdown, 1000);
+    cargarDatos();
   </script>
 </body>
 </html>

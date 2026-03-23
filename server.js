@@ -103,24 +103,40 @@ app.get('/api/planificacion', async (req, res) => {
 });
 
 // GET  /api/planificacion/kds?fecha=YYYY-MM-DD[&tipo=Frío|Caliente]
-//      Solo devuelve ítems con cantidad_planificada > 0 (para el KDS).
-//      Parámetro opcional ?tipo=Frío o ?tipo=Caliente para filtrar cuarto.
+//      Endpoint mejorado para KDS v2.0: incluye división de cantidades,
+//      envase, total planificado y total producido actual.
 app.get('/api/planificacion/kds', async (req, res) => {
   const fecha = req.query.fecha || new Date().toISOString().slice(0, 10);
   const tipo  = req.query.tipo  || null; // 'Frío' | 'Caliente' | null
   try {
-    let sql = `SELECT p.plu_id, p.nombre, p.tipo_cuarto,
-              pd.cantidad_planificada
-         FROM planificacion_diaria pd
-         JOIN productos p ON pd.plu_id = p.plu_id
-        WHERE pd.fecha = ?
-          AND pd.cantidad_planificada > 0`;
+    let sql = `
+      SELECT
+        p.plu_id,
+        p.nombre,
+        p.tipo_cuarto,
+        p.envase,
+        pd.cant_sala,
+        pd.cant_tienda,
+        pd.cant_marley,
+        pd.cantidad_planificada AS total_planificado,
+        COALESCE(pr.cantidad_real, 0) AS total_producido,
+        COALESCE(pr.hora_inicio, NULL) AS hora_inicio,
+        COALESCE(pr.hora_fin, NULL) AS hora_fin,
+        pr.id AS registro_id
+      FROM planificacion_diaria pd
+      JOIN productos p ON pd.plu_id = p.plu_id
+      LEFT JOIN produccion_real pr
+        ON pr.plu_id = pd.plu_id AND pr.fecha = pd.fecha
+      WHERE pd.fecha = ?
+        AND pd.cantidad_planificada > 0`;
+
     const params = [fecha];
     if (tipo) {
       sql += ` AND p.tipo_cuarto = ?`;
       params.push(tipo);
     }
     sql += ` ORDER BY p.nombre`;
+
     const [rows] = await pool.execute(sql, params);
     res.json(rows);
   } catch (e) { err500(res, e); }
@@ -261,6 +277,82 @@ const guardarProduccion = async (req, res) => {
 app.post('/api/produccion', guardarProduccion);
 app.post('/api/produccion_real', guardarProduccion);
 
+// ══════════════════════════════════════════════════════════════
+//  FLUJO DE 2 PASOS - v2.0
+// ══════════════════════════════════════════════════════════════
+
+// POST /api/produccion/iniciar
+//      Registra el inicio de preparación de un producto.
+//      Solo guarda la fecha, plu_id y hora_inicio.
+app.post('/api/produccion/iniciar', async (req, res) => {
+  const { fecha, plu_id } = req.body;
+
+  if (!fecha || !plu_id)
+    return res.status(400).json({ error: 'fecha y plu_id son requeridos.' });
+
+  try {
+    const ahora = new Date();
+
+    // Verificar si ya existe un registro para este producto en esta fecha
+    const [existing] = await pool.execute(
+      'SELECT id, hora_inicio FROM produccion_real WHERE fecha = ? AND plu_id = ?',
+      [fecha, plu_id]
+    );
+
+    if (existing.length > 0) {
+      // Ya existe: actualizar solo si no tiene hora_inicio
+      if (!existing[0].hora_inicio) {
+        await pool.execute(
+          'UPDATE produccion_real SET hora_inicio = ? WHERE fecha = ? AND plu_id = ?',
+          [ahora, fecha, plu_id]
+        );
+        return res.json({ success: true, mensaje: 'Preparación iniciada.' });
+      } else {
+        return res.json({ success: true, mensaje: 'Ya estaba iniciado.' });
+      }
+    } else {
+      // No existe: crear nuevo registro
+      await pool.execute(
+        `INSERT INTO produccion_real
+          (fecha, plu_id, hora_inicio, cantidad_real, no_producido)
+         VALUES (?, ?, ?, 0, 0)`,
+        [fecha, plu_id, ahora]
+      );
+      return res.json({ success: true, mensaje: 'Preparación iniciada.' });
+    }
+  } catch (e) { err500(res, e); }
+});
+
+// PUT /api/produccion/finalizar
+//     Finaliza la preparación registrando cantidad real, no producido,
+//     cocinero y comentarios. Marca hora_fin.
+app.put('/api/produccion/finalizar', async (req, res) => {
+  const { fecha, plu_id, cantidad_real, no_producido, cocinero_id, comentarios } = req.body;
+
+  if (!fecha || !plu_id)
+    return res.status(400).json({ error: 'fecha y plu_id son requeridos.' });
+
+  const real = Number(cantidad_real) || 0;
+  const noProducido = Number(no_producido) || 0;
+  const ahora = new Date();
+
+  try {
+    // Actualizar registro existente (debe existir porque se llamó /iniciar primero)
+    await pool.execute(
+      `UPDATE produccion_real
+       SET cantidad_real = ?,
+           no_producido = ?,
+           cocinero_id = ?,
+           comentarios = ?,
+           hora_fin = ?
+       WHERE fecha = ? AND plu_id = ?`,
+      [real, noProducido, cocinero_id || null, (comentarios || '').trim(), ahora, fecha, plu_id]
+    );
+
+    res.json({ success: true, mensaje: 'Producción finalizada.' });
+  } catch (e) { err500(res, e); }
+});
+
 // GET /api/resumen_diario?fecha=YYYY-MM-DD
 //     Resumen consolidado para la pantalla de previsualización.
 app.get('/api/resumen_diario', async (req, res) => {
@@ -316,7 +408,9 @@ app.get('/api/informes/excel', async (req, res) => {
               COALESCE(pd.cant_marley,           0)  AS cant_marley,
               COALESCE(pd.cantidad_planificada,  0)  AS cantidad_planificada,
               pr.cantidad_real,
-                  pr.no_producido,
+              pr.no_producido,
+              pr.hora_inicio,
+              pr.hora_fin,
               COALESCE(c.nombre,                '')  AS cocinero,
               COALESCE(pr.comentarios,          '')  AS comentarios
          FROM produccion_real pr
@@ -336,18 +430,20 @@ app.get('/api/informes/excel', async (req, res) => {
     });
 
     sheet.columns = [
-      { header: 'Fecha',        key: 'fecha',                width: 14 },
-      { header: 'PLU',          key: 'plu_id',               width: 10 },
-      { header: 'Producto',     key: 'nombre',               width: 34 },
-      { header: 'Cuarto',       key: 'tipo_cuarto',          width: 12 },
-      { header: 'Plan Sala',    key: 'cant_sala',            width: 12 },
-      { header: 'Plan Tienda',  key: 'cant_tienda',          width: 14 },
-      { header: 'Plan Marley',  key: 'cant_marley',          width: 14 },
-      { header: 'Planificado',  key: 'cantidad_planificada', width: 14 },
-      { header: 'Real',         key: 'cantidad_real',        width: 10 },
-      { header: 'No Producido', key: 'no_producido',         width: 14 },
-      { header: 'Cocinero',     key: 'cocinero',             width: 22 },
-      { header: 'Comentarios',  key: 'comentarios',          width: 32 },
+      { header: 'Fecha',           key: 'fecha',                width: 14 },
+      { header: 'PLU',             key: 'plu_id',               width: 10 },
+      { header: 'Producto',        key: 'nombre',               width: 34 },
+      { header: 'Cuarto',          key: 'tipo_cuarto',          width: 12 },
+      { header: 'Plan Sala',       key: 'cant_sala',            width: 12 },
+      { header: 'Plan Tienda',     key: 'cant_tienda',          width: 14 },
+      { header: 'Plan Marley',     key: 'cant_marley',          width: 14 },
+      { header: 'Planificado',     key: 'cantidad_planificada', width: 14 },
+      { header: 'Real',            key: 'cantidad_real',        width: 10 },
+      { header: 'No Producido',    key: 'no_producido',         width: 14 },
+      { header: 'Hora de Inicio',  key: 'hora_inicio',          width: 20 },
+      { header: 'Hora de Finalización', key: 'hora_fin',        width: 20 },
+      { header: 'Cocinero',        key: 'cocinero',             width: 22 },
+      { header: 'Comentarios',     key: 'comentarios',          width: 32 },
     ];
 
     // Estilo de cabecera
@@ -363,6 +459,16 @@ app.get('/api/informes/excel', async (req, res) => {
         fecha: r.fecha instanceof Date
           ? r.fecha.toISOString().slice(0, 10)
           : String(r.fecha).slice(0, 10),
+        hora_inicio: r.hora_inicio
+          ? (r.hora_inicio instanceof Date
+              ? r.hora_inicio.toLocaleString('es-PE', { timeZone: 'America/Lima' })
+              : r.hora_inicio)
+          : '',
+        hora_fin: r.hora_fin
+          ? (r.hora_fin instanceof Date
+              ? r.hora_fin.toLocaleString('es-PE', { timeZone: 'America/Lima' })
+              : r.hora_fin)
+          : '',
       });
       // Filas alternadas
       if (i % 2 === 1) {
