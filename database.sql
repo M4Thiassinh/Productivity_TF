@@ -1,4 +1,4 @@
-﻿-- ============================================================
+﻿﻿-- ============================================================
 --  KITCHEN MANAGER – Script de creacion de base de datos
 --  Motor: MySQL 8.x / MariaDB 10.x
 --  Codificacion: UTF-8
