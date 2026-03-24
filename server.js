@@ -10,6 +10,13 @@ const express = require('express');
 const mysql   = require('mysql2/promise');
 const path    = require('path');
 const ExcelJS = require('exceljs');
+const dayjs   = require('dayjs');
+const utc     = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
+
+// Configurar dayjs con plugins de timezone
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const app = express();
 app.use(express.json());
@@ -28,7 +35,7 @@ const pool = mysql.createPool({
   database        : process.env.DB_NAME     || 'kitchen_db',
   waitForConnections: true,
   connectionLimit : 10,
-  timezone        : 'local',
+  timezone        : '-03:00', // Chile/Santiago (UTC-3, DST UTC-4 depende de la época)
 });
 
 // ── Helper de errores ──────────────────────────────────────────
@@ -452,23 +459,43 @@ app.get('/api/informes/excel', async (req, res) => {
     headerRow.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
     headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-    // Filas de datos con formato de fecha legible
+    // Filas de datos con formato de fecha legible en zona horaria de Chile
     rows.forEach((r, i) => {
+      // Formatear la fecha principal usando dayjs con timezone de Chile
+      let fechaFormateada = '';
+      if (r.fecha) {
+        if (r.fecha instanceof Date) {
+          fechaFormateada = dayjs(r.fecha).tz('America/Santiago').format('YYYY-MM-DD');
+        } else {
+          fechaFormateada = String(r.fecha).slice(0, 10);
+        }
+      }
+
+      // Formatear hora_inicio con timezone de Chile
+      let horaInicioFormateada = '';
+      if (r.hora_inicio) {
+        if (r.hora_inicio instanceof Date) {
+          horaInicioFormateada = dayjs(r.hora_inicio).tz('America/Santiago').format('DD/MM/YYYY, h:mm:ss A');
+        } else {
+          horaInicioFormateada = r.hora_inicio;
+        }
+      }
+
+      // Formatear hora_fin con timezone de Chile
+      let horaFinFormateada = '';
+      if (r.hora_fin) {
+        if (r.hora_fin instanceof Date) {
+          horaFinFormateada = dayjs(r.hora_fin).tz('America/Santiago').format('DD/MM/YYYY, h:mm:ss A');
+        } else {
+          horaFinFormateada = r.hora_fin;
+        }
+      }
+
       const row = sheet.addRow({
         ...r,
-        fecha: r.fecha instanceof Date
-          ? r.fecha.toISOString().slice(0, 10)
-          : String(r.fecha).slice(0, 10),
-        hora_inicio: r.hora_inicio
-          ? (r.hora_inicio instanceof Date
-              ? r.hora_inicio.toLocaleString('es-PE', { timeZone: 'America/Lima' })
-              : r.hora_inicio)
-          : '',
-        hora_fin: r.hora_fin
-          ? (r.hora_fin instanceof Date
-              ? r.hora_fin.toLocaleString('es-PE', { timeZone: 'America/Lima' })
-              : r.hora_fin)
-          : '',
+        fecha: fechaFormateada,
+        hora_inicio: horaInicioFormateada,
+        hora_fin: horaFinFormateada,
       });
       // Filas alternadas
       if (i % 2 === 1) {
