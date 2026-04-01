@@ -74,7 +74,7 @@ INSERT IGNORE INTO cocineros (nombre) VALUES
 -- ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS produccion_real (
   id            INT           NOT NULL AUTO_INCREMENT,
-  fecha         DATE          NOT NULL,
+  fecha         DATETIME       NOT NULL,
   plu_id        VARCHAR(20)   NOT NULL,
   cantidad_real INT           NOT NULL DEFAULT 0,
   no_producido  INT           NOT NULL DEFAULT 0,

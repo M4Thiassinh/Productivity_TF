@@ -44,6 +44,12 @@ const err500 = (res, e) => {
   res.status(500).json({ error: e.message });
 };
 
+const getLocalISODate = () => {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+};
+
 // ══════════════════════════════════════════════════════════════
 //  PRODUCTOS
 // ══════════════════════════════════════════════════════════════
@@ -94,7 +100,7 @@ app.get('/api/cocineros', async (req, res) => {
 //      Devuelve todos los registros de planificación para esa fecha.
 //      Si no se pasa fecha, usa el día de hoy.
 app.get('/api/planificacion', async (req, res) => {
-  const fecha = req.query.fecha || new Date().toISOString().slice(0, 10);
+  const fecha = req.query.fecha || getLocalISODate();
   try {
     const [rows] = await pool.execute(
       `SELECT pd.id, p.plu_id, p.nombre, p.tipo_cuarto,
@@ -113,7 +119,7 @@ app.get('/api/planificacion', async (req, res) => {
 //      Endpoint mejorado para KDS v2.0: incluye división de cantidades,
 //      envase, total planificado y total producido actual.
 app.get('/api/planificacion/kds', async (req, res) => {
-  const fecha = req.query.fecha || new Date().toISOString().slice(0, 10);
+  const fecha = req.query.fecha || getLocalISODate();
   const tipo  = req.query.tipo  || null; // 'Frío' | 'Caliente' | null
   try {
     let sql = `
@@ -222,7 +228,7 @@ app.post('/api/planificacion', async (req, res) => {
 //      Devuelve los productos planificados del día con su producción
 //      real (si ya fue registrada). LEFT JOIN → muestra 0 si aún no hay registro.
 app.get('/api/produccion', async (req, res) => {
-  const fecha = req.query.fecha || new Date().toISOString().slice(0, 10);
+  const fecha = req.query.fecha || getLocalISODate();
   try {
     const [rows] = await pool.execute(
       `SELECT p.plu_id, p.nombre, p.tipo_cuarto,
@@ -363,7 +369,7 @@ app.put('/api/produccion/finalizar', async (req, res) => {
 // GET /api/resumen_diario?fecha=YYYY-MM-DD
 //     Resumen consolidado para la pantalla de previsualización.
 app.get('/api/resumen_diario', async (req, res) => {
-  const fecha = req.query.fecha || new Date().toISOString().slice(0, 10);
+  const fecha = req.query.fecha || getLocalISODate();
   try {
     const [rows] = await pool.execute(
       `SELECT p.plu_id,

@@ -118,7 +118,12 @@
   </div>
 
   <script>
-    const today = new Date().toISOString().slice(0, 10);
+    const getLocalISODate = () => {
+      const now = new Date();
+      const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+      return local.toISOString().slice(0, 10);
+    };
+    const today = getLocalISODate();
     const fechaInput = document.getElementById('input-fecha');
     fechaInput.value = today;
 
