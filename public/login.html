@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🔐 Login - Kitchen Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 min-h-screen flex items-center justify-center p-6">
+  
+  <div class="w-full max-w-md">
+    
+    <!-- Logo y título -->
+    <div class="text-center mb-8">
+      <div class="text-7xl mb-4">🍽️</div>
+      <h1 class="text-4xl font-black text-white mb-2">Kitchen Manager</h1>
+      <p class="text-gray-400 text-sm">Ingresa tus credenciales para continuar</p>
+    </div>
+
+    <!-- Formulario de login -->
+    <div class="bg-gray-900 rounded-2xl shadow-2xl p-8 border border-gray-800">
+      
+      <!-- Mensaje de error -->
+      <div id="error-msg" class="hidden bg-red-500/10 border border-red-500 text-red-400 px-4 py-3 rounded-lg mb-6 text-sm">
+        <span id="error-text"></span>
+      </div>
+
+      <form id="loginForm">
+        
+        <!-- Selector de Usuario -->
+        <div class="mb-6">
+          <label class="block text-gray-300 text-sm font-semibold mb-2" for="username">
+            👤 Tipo de Usuario
+          </label>
+          <select
+            id="username"
+            name="username"
+            required
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white
+                   focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50
+                   transition-all cursor-pointer"
+          >
+            <option value="personal">👨‍🍳 Personal de Cocina (Solo KDS)</option>
+            <option value="admin">👨‍💼 Administrador (Acceso Total)</option>
+          </select>
+          <p class="text-gray-500 text-xs mt-2">
+            <span class="inline-block mr-2">ℹ️</span>
+            Personal solo puede ver pantallas KDS
+          </p>
+        </div>
+
+        <!-- Contraseña -->
+        <div class="mb-6">
+          <label class="block text-gray-300 text-sm font-semibold mb-2" for="password">
+            🔑 Contraseña
+          </label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="••••••••"
+            required
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white
+                   focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50
+                   transition-all"
+          />
+        </div>
+
+        <!-- Botón submit -->
+        <button
+          type="submit"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg
+                 transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-blue-600/50"
+        >
+          Iniciar Sesión
+        </button>
+      </form>
+
+    </div>
+
+    <!-- Footer info -->
+    <div class="text-center mt-6 text-gray-500 text-xs">
+      <p>🔒 Acceso restringido al personal autorizado</p>
+    </div>
+
+  </div>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const errorMsg = document.getElementById('error-msg');
+    const errorText = document.getElementById('error-text');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          // Login exitoso - redirigir
+          window.location.href = '/';
+        } else {
+          // Mostrar error
+          errorText.textContent = data.error || 'Credenciales incorrectas';
+          errorMsg.classList.remove('hidden');
+          
+          // Ocultar error después de 4 segundos
+          setTimeout(() => {
+            errorMsg.classList.add('hidden');
+          }, 4000);
+          
+          // Limpiar contraseña
+          document.getElementById('password').value = '';
+        }
+      } catch (error) {
+        errorText.textContent = 'Error de conexión con el servidor';
+        errorMsg.classList.remove('hidden');
+      }
+    });
+  </script>
+
+</body>
+</html>

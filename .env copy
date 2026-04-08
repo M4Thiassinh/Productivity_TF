@@ -1,0 +1,5 @@
+DB_HOST=192.168.0.96
+DB_USER=administrador
+DB_PASSWORD=barrio4500
+DB_NAME=kitchen_db
+DB_PORT=3306

@@ -7,6 +7,8 @@
 require('dotenv').config();
 
 const express = require('express');
+const session = require('express-session');
+const bcrypt  = require('bcryptjs');
 const mysql   = require('mysql2/promise');
 const path    = require('path');
 const ExcelJS = require('exceljs');
@@ -21,7 +23,212 @@ dayjs.extend(timezone);
 const app = express();
 app.use(express.json());
 
-// ── Sirve todo lo que esté en /public como archivos estáticos ──
+// ══════════════════════════════════════════════════════════════
+//  CONFIGURACIÓN DE SESIONES
+// ══════════════════════════════════════════════════════════════
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'kitchen-manager-secret-key-2024',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: false, // Cambiar a true si usas HTTPS
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 horas
+  }
+}));
+
+// ══════════════════════════════════════════════════════════════
+//  CREDENCIALES (puedes cambiarlas en .env)
+// ══════════════════════════════════════════════════════════════
+const CREDENTIALS = {
+  // Contraseña única para personal
+  staff: {
+    password: process.env.STAFF_PASSWORD || 'cocina2024',
+    role: 'staff'
+  },
+  // Usuario administrador
+  admin: {
+    password: process.env.ADMIN_PASSWORD || 'admin2024',
+    role: 'admin'
+  }
+};
+
+// ══════════════════════════════════════════════════════════════
+//  MIDDLEWARE DE AUTENTICACIÓN Y AUTORIZACIÓN
+// ══════════════════════════════════════════════════════════════
+
+// Middleware: Requiere estar autenticado
+const requireAuth = (req, res, next) => {
+  if (req.session && req.session.authenticated) {
+    return next();
+  }
+  
+  // Si es una petición AJAX, devuelve 401
+  if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+  
+  // Si es una página HTML, redirige a login
+  return res.redirect('/login.html');
+};
+
+// Middleware: Requiere rol de administrador
+const requireAdmin = (req, res, next) => {
+  if (req.session && req.session.authenticated && req.session.role === 'admin') {
+    return next();
+  }
+  
+  // Si es una petición AJAX, devuelve 403
+  if (req.xhr || req.headers.accept?.indexOf('json') > -1) {
+    return res.status(403).json({ error: 'Acceso denegado. Requiere permisos de administrador.' });
+  }
+  
+  // Si es una página HTML, redirige al home o muestra error
+  return res.status(403).send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Acceso Denegado</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body class="bg-gray-950 min-h-screen flex items-center justify-center p-6">
+      <div class="text-center">
+        <div class="text-8xl mb-6">🚫</div>
+        <h1 class="text-4xl font-black text-white mb-4">Acceso Denegado</h1>
+        <p class="text-gray-400 mb-8">No tienes permisos para acceder a esta página.</p>
+        <a href="/" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all">
+          Volver al Inicio
+        </a>
+      </div>
+    </body>
+    </html>
+  `);
+};
+
+// ══════════════════════════════════════════════════════════════
+//  RUTAS DE AUTENTICACIÓN
+// ══════════════════════════════════════════════════════════════
+
+// Login
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  
+  if (!password) {
+    return res.status(400).json({ error: 'Contraseña requerida' });
+  }
+
+  const user = username?.toLowerCase().trim() || 'personal';
+  
+  try {
+    // Verificar credenciales
+    let validCredentials = false;
+    let role = 'staff';
+    
+    if (user === 'admin' && password === CREDENTIALS.admin.password) {
+      validCredentials = true;
+      role = 'admin';
+    } else if ((user === 'personal' || !user) && password === CREDENTIALS.staff.password) {
+      validCredentials = true;
+      role = 'staff';
+    }
+    
+    if (validCredentials) {
+      req.session.authenticated = true;
+      req.session.username = user;
+      req.session.role = role;
+      
+      return res.json({ 
+        success: true, 
+        message: 'Login exitoso',
+        role: role 
+      });
+    } else {
+      return res.status(401).json({ error: 'Credenciales incorrectas' });
+    }
+  } catch (error) {
+    console.error('Error en login:', error);
+    return res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
+// Logout
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Error al cerrar sesión' });
+    }
+    res.json({ success: true });
+  });
+});
+
+// Verificar sesión
+app.get('/api/auth/check', (req, res) => {
+  if (req.session && req.session.authenticated) {
+    return res.json({ 
+      authenticated: true,
+      username: req.session.username,
+      role: req.session.role
+    });
+  }
+  res.json({ authenticated: false });
+});
+
+// ── Sirve archivos estáticos SIN protección (CSS, JS, imágenes) ──
+app.use('/assets', express.static(path.join(__dirname, 'public/assets')));
+
+// ── Páginas públicas (solo login) ──
+app.get('/login.html', (req, res) => {
+  // Si ya está autenticado, redirige al home
+  if (req.session && req.session.authenticated) {
+    return res.redirect('/');
+  }
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// ── PÁGINAS RESTRINGIDAS SOLO PARA ADMIN ──
+const adminPages = [
+  '/planificacion.html',
+  '/registro.html', 
+  '/informes.html'
+];
+
+adminPages.forEach(page => {
+  app.get(page, requireAuth, requireAdmin, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', page.substring(1)));
+  });
+});
+
+// ── PÁGINAS KDS (Accesibles para todos los autenticados) ──
+const kdsPages = [
+  '/kds.html',
+  '/kds-caliente.html',
+  '/kds-frio.html'
+];
+
+kdsPages.forEach(page => {
+  app.get(page, requireAuth, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', page.substring(1)));
+  });
+});
+
+// ── PROTEGER TODAS LAS DEMÁS RUTAS HTML ──
+app.use((req, res, next) => {
+  // Si es una ruta de API o asset, dejar pasar al siguiente middleware
+  if (req.path.startsWith('/api/') || req.path.startsWith('/assets/')) {
+    return next();
+  }
+  
+  // Si es un archivo HTML o la raíz, requerir autenticación
+  if (req.path.endsWith('.html') || req.path === '/') {
+    return requireAuth(req, res, next);
+  }
+  
+  next();
+});
+
+// ── Sirve el resto de archivos estáticos ──
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ══════════════════════════════════════════════════════════════
@@ -35,7 +242,7 @@ const pool = mysql.createPool({
   database        : process.env.DB_NAME     || 'kitchen_db',
   waitForConnections: true,
   connectionLimit : 10,
-  timezone        : '-03:00', // Chile/Santiago (UTC-3, DST UTC-4 depende de la época)
+  // Timezone eliminado: ahora manejamos todo en Node.js con dayjs + America/Santiago
 });
 
 // ── Helper de errores ──────────────────────────────────────────
@@ -51,6 +258,50 @@ const getLocalISODate = () => {
 };
 
 // ══════════════════════════════════════════════════════════════
+//  PROTEGER RUTAS API CON ROLES
+// ══════════════════════════════════════════════════════════════
+
+// Middleware para rutas de planificación (solo admin puede modificar)
+app.use('/api/planificacion*', requireAuth, (req, res, next) => {
+  console.log(`📋 Planificación request: ${req.method} ${req.path} (URL completa: ${req.originalUrl}) | Role: ${req.session.role}`);
+  
+  // GET a /api/planificacion/kds está permitido para todos (personal necesita ver KDS)
+  // Usamos originalUrl porque el path puede estar modificado por el middleware
+  if (req.method === 'GET' && req.originalUrl.includes('/api/planificacion/kds')) {
+    console.log('✅ Permitiendo acceso a KDS (todos los roles)');
+    return next();
+  }
+  
+  // Todas las demás operaciones requieren admin
+  if (req.method !== 'GET' || req.originalUrl.includes('/batch')) {
+    console.log('🔒 Requiere admin (POST/PUT/DELETE o batch)');
+    return requireAdmin(req, res, next);
+  }
+  
+  // GET a planificación normal también requiere admin (para ver la planificación)
+  console.log('🔒 Requiere admin (GET a planificación)');
+  return requireAdmin(req, res, next);
+});
+
+// Rutas de producción, informes y resumen - solo admin
+app.use('/api/produccion*', requireAuth, requireAdmin);
+app.use('/api/resumen_diario', requireAuth, requireAdmin);
+app.use('/api/informes/*', requireAuth, requireAdmin);
+
+// ══════════════════════════════════════════════════════════════
+//  PROTEGER TODAS LAS RUTAS API (excepto /api/auth/*)
+// ══════════════════════════════════════════════════════════════
+app.use('/api/*', (req, res, next) => {
+  // Permitir rutas de autenticación
+  if (req.path.startsWith('/api/auth/')) {
+    return next();
+  }
+  
+  // Requerir autenticación para todas las demás rutas API
+  return requireAuth(req, res, next);
+});
+
+// ══════════════════════════════════════════════════════════════
 //  PRODUCTOS
 // ══════════════════════════════════════════════════════════════
 
@@ -64,8 +315,8 @@ app.get('/api/productos', async (req, res) => {
   } catch (e) { err500(res, e); }
 });
 
-// POST /api/productos  → Crea un producto nuevo
-app.post('/api/productos', async (req, res) => {
+// POST /api/productos  → Crea un producto nuevo (solo admin)
+app.post('/api/productos', requireAdmin, async (req, res) => {
   const { plu_id, nombre, tipo_cuarto } = req.body;
   if (!plu_id || !nombre || !tipo_cuarto)
     return res.status(400).json({ error: 'plu_id, nombre y tipo_cuarto son requeridos.' });
@@ -304,7 +555,9 @@ app.post('/api/produccion/iniciar', async (req, res) => {
     return res.status(400).json({ error: 'fecha y plu_id son requeridos.' });
 
   try {
-    const ahora = new Date();
+    // Capturar hora actual en zona horaria de Santiago, Chile
+    // Formato HH:mm:ss para que MySQL guarde solo la hora sin hacer conversiones
+    const horaActual = dayjs().tz('America/Santiago').format('HH:mm:ss');
 
     // Verificar si ya existe un registro para este producto en esta fecha
     const [existing] = await pool.execute(
@@ -317,7 +570,7 @@ app.post('/api/produccion/iniciar', async (req, res) => {
       if (!existing[0].hora_inicio) {
         await pool.execute(
           'UPDATE produccion_real SET hora_inicio = ? WHERE fecha = ? AND plu_id = ?',
-          [ahora, fecha, plu_id]
+          [horaActual, fecha, plu_id]
         );
         return res.json({ success: true, mensaje: 'Preparación iniciada.' });
       } else {
@@ -329,7 +582,7 @@ app.post('/api/produccion/iniciar', async (req, res) => {
         `INSERT INTO produccion_real
           (fecha, plu_id, hora_inicio, cantidad_real, no_producido)
          VALUES (?, ?, ?, 0, 0)`,
-        [fecha, plu_id, ahora]
+        [fecha, plu_id, horaActual]
       );
       return res.json({ success: true, mensaje: 'Preparación iniciada.' });
     }
@@ -347,7 +600,10 @@ app.put('/api/produccion/finalizar', async (req, res) => {
 
   const real = Number(cantidad_real) || 0;
   const noProducido = Number(no_producido) || 0;
-  const ahora = new Date();
+  
+  // Capturar hora actual en zona horaria de Santiago, Chile
+  // Formato HH:mm:ss para que MySQL guarde solo la hora sin hacer conversiones
+  const horaActual = dayjs().tz('America/Santiago').format('HH:mm:ss');
 
   try {
     // Actualizar registro existente (debe existir porque se llamó /iniciar primero)
@@ -359,7 +615,7 @@ app.put('/api/produccion/finalizar', async (req, res) => {
            comentarios = ?,
            hora_fin = ?
        WHERE fecha = ? AND plu_id = ?`,
-      [real, noProducido, cocinero_id || null, (comentarios || '').trim(), ahora, fecha, plu_id]
+      [real, noProducido, cocinero_id || null, (comentarios || '').trim(), horaActual, fecha, plu_id]
     );
 
     res.json({ success: true, mensaje: 'Producción finalizada.' });
@@ -467,33 +723,50 @@ app.get('/api/informes/excel', async (req, res) => {
 
     // Filas de datos con formato de fecha legible en zona horaria de Chile
     rows.forEach((r, i) => {
-      // Formatear la fecha principal usando dayjs con timezone de Chile
+      // FECHA PRINCIPAL: Forzar que sea string YYYY-MM-DD sin conversiones
+      // Evitamos que exceljs interprete como UTC y reste horas
       let fechaFormateada = '';
       if (r.fecha) {
-        if (r.fecha instanceof Date) {
+        if (typeof r.fecha === 'string') {
+          // Ya es string: usar directamente
+          fechaFormateada = r.fecha.slice(0, 10);
+        } else if (r.fecha instanceof Date) {
+          // Es Date: formatear en timezone Santiago para evitar desfase
           fechaFormateada = dayjs(r.fecha).tz('America/Santiago').format('YYYY-MM-DD');
-        } else {
-          fechaFormateada = String(r.fecha).slice(0, 10);
         }
       }
 
-      // Formatear hora_inicio con timezone de Chile
+      // HORA DE INICIO: Formatear como DD/MM/YYYY, h:mm:ss A
       let horaInicioFormateada = '';
       if (r.hora_inicio) {
-        if (r.hora_inicio instanceof Date) {
-          horaInicioFormateada = dayjs(r.hora_inicio).tz('America/Santiago').format('DD/MM/YYYY, h:mm:ss A');
-        } else {
-          horaInicioFormateada = r.hora_inicio;
+        if (typeof r.hora_inicio === 'string') {
+          // Si es string tipo "14:30:00", agregar la fecha del día actual
+          const fechaStr = fechaFormateada || dayjs().format('YYYY-MM-DD');
+          horaInicioFormateada = dayjs(`${fechaStr} ${r.hora_inicio}`)
+            .tz('America/Santiago')
+            .format('DD/MM/YYYY, h:mm:ss A');
+        } else if (r.hora_inicio instanceof Date) {
+          // Si es Date completo
+          horaInicioFormateada = dayjs(r.hora_inicio)
+            .tz('America/Santiago')
+            .format('DD/MM/YYYY, h:mm:ss A');
         }
       }
 
-      // Formatear hora_fin con timezone de Chile
+      // HORA DE FIN: Formatear como DD/MM/YYYY, h:mm:ss A
       let horaFinFormateada = '';
       if (r.hora_fin) {
-        if (r.hora_fin instanceof Date) {
-          horaFinFormateada = dayjs(r.hora_fin).tz('America/Santiago').format('DD/MM/YYYY, h:mm:ss A');
-        } else {
-          horaFinFormateada = r.hora_fin;
+        if (typeof r.hora_fin === 'string') {
+          // Si es string tipo "16:45:00", agregar la fecha del día actual
+          const fechaStr = fechaFormateada || dayjs().format('YYYY-MM-DD');
+          horaFinFormateada = dayjs(`${fechaStr} ${r.hora_fin}`)
+            .tz('America/Santiago')
+            .format('DD/MM/YYYY, h:mm:ss A');
+        } else if (r.hora_fin instanceof Date) {
+          // Si es Date completo
+          horaFinFormateada = dayjs(r.hora_fin)
+            .tz('America/Santiago')
+            .format('DD/MM/YYYY, h:mm:ss A');
         }
       }
 
@@ -523,13 +796,17 @@ app.get('/api/informes/excel', async (req, res) => {
 //  START
 // ══════════════════════════════════════════════════════════════
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const HOST = process.env.HOST || '0.0.0.0'; // Escucha en todas las interfaces
+
+app.listen(PORT, HOST, () => {
   console.log('\n┌──────────────────────────────────────────────┐');
   console.log('│  🍽️  Kitchen Manager – Servidor iniciado       │');
   console.log('├──────────────────────────────────────────────┤');
-  console.log(`│  HOME          → http://localhost:${PORT}/          │`);
-  console.log(`│  Planificación → http://localhost:${PORT}/planificacion.html │`);
-  console.log(`│  KDS           → http://localhost:${PORT}/kds.html           │`);
-  console.log(`│  Registro      → http://localhost:${PORT}/registro.html      │`);
+  console.log(`│  LOCAL         → http://localhost:${PORT}/          │`);
+  console.log(`│  RED LOCAL     → http://<TU_IP>:${PORT}/           │`);
+  console.log('├──────────────────────────────────────────────┤');
+  console.log(`│  Planificación → /planificacion.html               │`);
+  console.log(`│  KDS           → /kds.html                         │`);
+  console.log(`│  Registro      → /registro.html                    │`);
   console.log('└──────────────────────────────────────────────┘\n');
 });

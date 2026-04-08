@@ -49,3 +49,11 @@ UPDATE productos SET envase = 'halopak' WHERE plu_id IN ('30414', '30412', '3051
 UPDATE productos SET envase = 'bn20' WHERE plu_id IN ('6996', '6946', '7902', '6947', '7898', '30404', '30504');
 UPDATE productos SET envase = 'individual' WHERE plu_id IN ('6968', '30429', '6955', '30369');
 UPDATE productos SET envase = 'familiar' WHERE plu_id IN ('30427', '1065', '30389', '9979');
+
+
+-- Cambiar hora_inicio de DATETIME/TIMESTAMP a TIME
+ALTER TABLE produccion_real 
+MODIFY COLUMN hora_inicio TIME NULL;
+-- Cambiar hora_fin de DATETIME/TIMESTAMP a TIME
+ALTER TABLE produccion_real 
+MODIFY COLUMN hora_fin TIME NULL;

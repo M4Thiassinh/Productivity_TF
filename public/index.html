@@ -11,6 +11,7 @@
       0%, 100% { box-shadow: 0 0 20px 0px rgba(99,102,241,0); }
       50%       { box-shadow: 0 0 40px 8px rgba(99,102,241,0.25); }
     }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body class="bg-gray-950 min-h-screen flex flex-col items-center justify-center p-6 select-none">
@@ -25,14 +26,15 @@
       Sistema de Gestión de Producción de Cocina
     </p>
     <p class="text-gray-600 mt-1 text-sm" id="fecha-hoy"></p>
+    <p class="text-gray-500 mt-2 text-sm" id="user-info"></p>
   </div>
 
-  <!-- ── 4 BOTONES GIGANTES (2 columnas en desktop, 1 en móvil) ── -->
+  <!-- ── 5 BOTONES (2 columnas en desktop, 1 en móvil) ── -->
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-4xl">
 
-    <!-- Botón 1: Planificación (Jefe) -->
-    <a href="/planificacion.html"
-       class="group flex flex-col items-center justify-center
+    <!-- Botón 1: Planificación (Jefe) - SOLO ADMIN -->
+    <a href="/planificacion.html" id="btn-planificacion"
+       class="admin-only group flex flex-col items-center justify-center
               bg-blue-700 hover:bg-blue-600
               text-white rounded-3xl p-10 shadow-2xl
               transition-all duration-300
@@ -51,9 +53,9 @@
       </span>
     </a>
 
-    <!-- Botón 2: Registro Producción (Cocineros) -->
-    <a href="/registro.html"
-       class="group flex flex-col items-center justify-center
+    <!-- Botón 2: Registro Producción (Cocineros) - SOLO ADMIN -->
+    <a href="/registro.html" id="btn-registro"
+       class="admin-only group flex flex-col items-center justify-center
               bg-orange-600 hover:bg-orange-500
               text-white rounded-3xl p-10 shadow-2xl
               transition-all duration-300
@@ -65,10 +67,10 @@
         🍳
       </span>
       <span class="text-xl font-black tracking-widest text-center uppercase">
-        Previsualización Registro
+        Registro
       </span>
       <span class="text-orange-200 text-sm mt-2 font-semibold">
-        Resumen
+        Producción Real
       </span>
     </a>
 
@@ -112,9 +114,9 @@
       </span>
     </a>
 
-    <!-- Botón 5: Informes (fila completa en desktop) -->
-    <a href="/informes.html"
-       class="group flex flex-col items-center justify-center
+    <!-- Botón 5: Informes (fila completa en desktop) - SOLO ADMIN -->
+    <a href="/informes.html" id="btn-informes"
+       class="admin-only group flex flex-col items-center justify-center
               bg-emerald-700 hover:bg-emerald-600
               text-white rounded-3xl p-10 shadow-2xl
               transition-all duration-300
@@ -135,17 +137,77 @@
 
   </div>
 
+  <!-- ── BOTÓN DE LOGOUT ── -->
+  <div class="mt-10">
+    <button 
+      onclick="logout()"
+      class="flex items-center gap-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 
+             rounded-lg transition-all duration-300 border border-gray-700 hover:border-gray-600"
+    >
+      <span>🚪</span>
+      <span class="font-semibold">Cerrar Sesión</span>
+    </button>
+  </div>
+
   <!-- ── FOOTER ── -->
-  <p class="text-gray-700 mt-14 text-xs">
+  <p class="text-gray-700 mt-8 text-xs">
     Kitchen Manager v2.0 · Uso interno
   </p>
 
   <script>
+    // Mostrar fecha actual
     document.getElementById('fecha-hoy').textContent =
       new Date().toLocaleDateString('es-PE', {
         weekday: 'long', year: 'numeric',
         month: 'long', day: 'numeric'
       });
+
+    // Verificar sesión y mostrar botones según rol
+    async function checkUserRole() {
+      try {
+        const response = await fetch('/api/auth/check');
+        const data = await response.json();
+        
+        if (data.authenticated) {
+          const userInfo = document.getElementById('user-info');
+          const adminElements = document.querySelectorAll('.admin-only');
+          
+          if (data.role === 'admin') {
+            // Admin ve todo
+            userInfo.textContent = '👨‍💼 Administrador - Acceso Total';
+            userInfo.classList.add('text-blue-400', 'font-semibold');
+            adminElements.forEach(el => el.classList.remove('hidden'));
+          } else {
+            // Personal solo ve KDS
+            userInfo.textContent = '👨‍🍳 Personal de Cocina - Solo KDS';
+            userInfo.classList.add('text-purple-400', 'font-semibold');
+            adminElements.forEach(el => el.classList.add('hidden'));
+          }
+        } else {
+          // No autenticado, redirigir a login
+          window.location.href = '/login.html';
+        }
+      } catch (error) {
+        console.error('Error verificando sesión:', error);
+        window.location.href = '/login.html';
+      }
+    }
+
+    // Ejecutar al cargar la página
+    checkUserRole();
+
+    // Función de logout
+    async function logout() {
+      if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+        try {
+          await fetch('/api/auth/logout', { method: 'POST' });
+          window.location.href = '/login.html';
+        } catch (error) {
+          console.error('Error al cerrar sesión:', error);
+          window.location.href = '/login.html';
+        }
+      }
+    }
   </script>
 </body>
 </html>

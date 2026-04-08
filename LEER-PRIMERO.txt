@@ -1,0 +1,79 @@
+╔══════════════════════════════════════════════════════════════╗
+║          📁 ARCHIVOS ORGANIZADOS Y LIMPIOS                   ║
+╚══════════════════════════════════════════════════════════════╝
+
+Para limpiar los archivos redundantes, ejecuta:
+
+    LIMPIAR-ARCHIVOS.bat
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ARCHIVOS QUE QUEDARÁN:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📜 DOCUMENTACIÓN:
+   ✅ GUIA-COMPLETA.md          - Instrucciones completas de todo
+   ✅ ROLES-Y-PERMISOS.md       - Detalles técnicos de roles
+   ✅ README.md                 - Documentación original del proyecto
+   ✅ requirements.txt          - Requisitos (referencia)
+   ✅ cambios.txt               - Historial de cambios
+
+⚙️ SCRIPTS ÚTILES:
+   ✅ iniciar-con-pm2.bat       - Iniciar el servidor con PM2
+   ✅ REINICIAR-Y-VER-LOGS.bat  - Reiniciar y ver estado
+   ✅ preparar-servidor.bat     - Script original del proyecto
+
+📂 ARCHIVOS DEL PROYECTO:
+   ✅ server.js                 - Servidor principal
+   ✅ package.json              - Dependencias
+   ✅ ecosystem.config.js       - Configuración PM2
+   ✅ .env                      - Variables de entorno (contraseñas)
+   ✅ database.sql              - Base de datos
+   ✅ public/                   - Archivos frontend
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ARCHIVOS QUE SE ELIMINARÁN (redundantes):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+❌ iniciar-normal.bat           - Redundante (usa iniciar-con-pm2.bat)
+❌ VERIFICAR-TODO.bat            - Redundante (info en GUIA-COMPLETA.md)
+❌ verificar-autenticacion.bat   - Redundante (info en GUIA-COMPLETA.md)
+❌ instalar-dependencias.bat     - Redundante (info en GUIA-COMPLETA.md)
+❌ PROBAR-SISTEMA.bat            - Redundante (usa iniciar-con-pm2.bat)
+❌ DEBUG-KDS.md                  - Redundante (info en GUIA-COMPLETA.md)
+❌ AUTENTICACION.md              - Consolidado en GUIA-COMPLETA.md
+❌ INSTRUCCIONES.txt             - Consolidado en GUIA-COMPLETA.md
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GUÍA RÁPIDA DESPUÉS DE LIMPIAR:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📖 Ver instrucciones completas:
+   Abre: GUIA-COMPLETA.md
+
+🚀 Iniciar servidor:
+   Ejecuta: iniciar-con-pm2.bat
+
+🔄 Reiniciar servidor:
+   Ejecuta: REINICIAR-Y-VER-LOGS.bat
+
+📊 Ver logs:
+   Comando: pm2 logs productivity-app
+
+🔧 Comandos útiles:
+   pm2 list                    - Ver estado
+   pm2 restart productivity-app - Reiniciar
+   pm2 stop productivity-app    - Detener
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+¿TODO LISTO?
+
+1. Ejecuta: LIMPIAR-ARCHIVOS.bat
+2. Lee: GUIA-COMPLETA.md para todas las instrucciones
+3. Usa: iniciar-con-pm2.bat para iniciar el servidor
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
