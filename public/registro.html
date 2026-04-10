@@ -3,19 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Previsualización Resumen Diario</title>
+  <title>Previsualización Resumen Diario v2</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-950 min-h-screen text-white p-4 md:p-8">
+
   <header class="flex flex-wrap items-center gap-4 mb-6 max-w-7xl mx-auto">
-    <a href="/" class="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors text-xl font-bold shrink-0">←</a>
+    <a href="/" class="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-800
+                       hover:bg-gray-700 text-gray-400 hover:text-white transition-colors
+                       text-xl font-bold shrink-0">←</a>
     <div class="flex-1 min-w-0">
-      <h1 class="text-3xl md:text-4xl font-black">Previsualización del Resumen Diario</h1>
+      <h1 class="text-3xl md:text-4xl font-black">
+        Previsualización del Resumen Diario
+        <span class="text-indigo-400 text-2xl font-bold ml-2">v2</span>
+      </h1>
       <p class="text-gray-500 text-sm mt-0.5" id="fecha-display"></p>
     </div>
     <div class="flex items-center gap-2 shrink-0">
       <label class="text-gray-500 text-xs font-semibold uppercase tracking-wider">Fecha</label>
-      <input type="date" id="input-fecha" class="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors" />
+      <input type="date" id="input-fecha"
+             class="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm
+                    focus:outline-none focus:border-emerald-500 transition-colors" />
     </div>
   </header>
 
@@ -24,29 +32,31 @@
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
         <div>
           <h2 class="text-xl font-black">Consolidado del Día</h2>
-          <p class="text-gray-500 text-sm">Resumen de planificación y ejecución por producto.</p>
+          <p class="text-gray-500 text-sm">Resumen dinámico de planificación y ejecución por producto y destino.</p>
         </div>
-        <button id="btn-excel-dia" onclick="descargarExcelDia()" class="bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 text-white font-black py-3 px-5 rounded-xl transition-all tracking-wide">
-          Descargar Excel del Día
+        <button id="btn-excel-dia" onclick="descargarExcelDia()"
+                class="bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800
+                       text-white font-black py-3 px-5 rounded-xl transition-all tracking-wide">
+          ⬇️ Descargar Excel del Día
         </button>
       </div>
 
       <div id="toast" class="hidden text-center py-3 px-5 rounded-xl font-semibold text-sm mb-4"></div>
 
+      <!-- Tabla dinámica (columnas de destinos se generan desde BD2) -->
       <div class="overflow-auto rounded-xl border border-gray-800">
-        <table class="min-w-full text-sm">
-          <thead class="bg-gray-800 text-gray-300 uppercase text-xs tracking-widest">
+        <table class="min-w-full text-sm" id="tabla-resumen">
+          <thead id="thead-resumen" class="bg-gray-800 text-gray-300 uppercase text-xs tracking-widest">
             <tr>
               <th class="px-4 py-3 text-left">Producto</th>
               <th class="px-4 py-3 text-right">Total Planeado</th>
               <th class="px-4 py-3 text-right">Total Real</th>
-              <th class="px-4 py-3 text-right">Total No Producido</th>
-              <th class="px-4 py-3 text-right">Total Sala</th>
-              <th class="px-4 py-3 text-right">Total Tienda</th>
-              <th class="px-4 py-3 text-right">Total Marley</th>
+              <th class="px-4 py-3 text-right">No Producido</th>
             </tr>
           </thead>
-          <tbody id="tbody-resumen" class="divide-y divide-gray-800 bg-gray-900"></tbody>
+          <tbody id="tbody-resumen" class="divide-y divide-gray-800 bg-gray-900">
+            <tr><td colspan="4" class="px-4 py-8 text-center text-gray-500 animate-pulse">Cargando…</td></tr>
+          </tbody>
           <tfoot id="tfoot-resumen" class="bg-gray-800/80 border-t border-emerald-700/60"></tfoot>
         </table>
       </div>
@@ -56,8 +66,7 @@
   <script>
     const getLocalISODate = () => {
       const now = new Date();
-      const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-      return local.toISOString().slice(0, 10);
+      return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     };
     const today = getLocalISODate();
     const fechaInput = document.getElementById('input-fecha');
@@ -66,12 +75,11 @@
     document.getElementById('fecha-display').textContent = new Date().toLocaleDateString('es-PE', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
-
-    fechaInput.addEventListener('change', () => cargarResumen());
+    fechaInput.addEventListener('change', cargarResumen);
 
     function showToast(msg, type = 'ok') {
       const el = document.getElementById('toast');
-      const ok = 'text-center py-3 px-5 rounded-xl font-semibold text-sm mb-4 bg-green-900 text-green-300 border border-green-700';
+      const ok  = 'text-center py-3 px-5 rounded-xl font-semibold text-sm mb-4 bg-green-900 text-green-300 border border-green-700';
       const err = 'text-center py-3 px-5 rounded-xl font-semibold text-sm mb-4 bg-red-900 text-red-300 border border-red-700';
       el.className = type === 'ok' ? ok : err;
       el.textContent = msg;
@@ -79,70 +87,87 @@
       el._t = setTimeout(() => { el.className = 'hidden'; }, 4500);
     }
 
-    function formatNum(n) {
-      return Number(n || 0).toLocaleString('es-CL');
-    }
- 
+    const fmt = n => Number(n || 0).toLocaleString('es-CL');
+
     function renderTabla(rows) {
       const tbody = document.getElementById('tbody-resumen');
       const tfoot = document.getElementById('tfoot-resumen');
+      const thead = document.getElementById('thead-resumen');
+
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">No hay datos para esta fecha.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-8 text-center text-gray-500">No hay datos para esta fecha en kitchen_db2.</td></tr>';
         tfoot.innerHTML = '';
         return;
       }
 
-      tbody.innerHTML = rows.map(r => `
-        <tr class="hover:bg-gray-800/40 transition-colors">
+      // Detectar destinos dinámicamente desde el primer registro
+      const destinos = rows[0].destinos || [];
+      const colSpan  = 4 + destinos.length * 2;
+
+      // Reconstruir cabecera con columnas dinámicas
+      thead.innerHTML = `<tr>
+        <th class="px-4 py-3 text-left">Producto</th>
+        <th class="px-4 py-3 text-right text-indigo-300">Total Plan.</th>
+        <th class="px-4 py-3 text-right text-emerald-300">Total Real</th>
+        <th class="px-4 py-3 text-right text-amber-300">No Produc.</th>
+        ${destinos.map(d => `
+          <th class="px-4 py-3 text-right text-purple-300">Plan ${d.nombre}</th>
+          <th class="px-4 py-3 text-right text-purple-200">Real ${d.nombre}</th>
+        `).join('')}
+      </tr>`;
+
+      const totales = { planificado: 0, real: 0, no_producido: 0 };
+      const totDest = {};
+      destinos.forEach(d => { totDest[d.destino_id] = { plan: 0, real: 0 }; });
+
+      tbody.innerHTML = rows.map(r => {
+        totales.planificado  += Number(r.total_planificado)  || 0;
+        totales.real         += Number(r.total_real)         || 0;
+        totales.no_producido += Number(r.total_no_producido) || 0;
+
+        const destCols = (r.destinos || []).map(d => {
+          totDest[d.destino_id].plan += d.cantidad_planificada || 0;
+          totDest[d.destino_id].real += d.cantidad_real        || 0;
+          return `
+            <td class="px-4 py-3 text-right text-purple-300">${fmt(d.cantidad_planificada)}</td>
+            <td class="px-4 py-3 text-right text-purple-200">${fmt(d.cantidad_real)}</td>`;
+        }).join('');
+
+        return `<tr class="hover:bg-gray-800/40 transition-colors">
           <td class="px-4 py-3 text-white font-semibold">${r.nombre}</td>
-          <td class="px-4 py-3 text-right text-cyan-300 font-bold">${formatNum(r.total_planeado)}</td>
-          <td class="px-4 py-3 text-right text-emerald-300 font-bold">${formatNum(r.total_real)}</td>
-          <td class="px-4 py-3 text-right text-amber-300 font-bold">${formatNum(r.total_no_producido)}</td>
-          <td class="px-4 py-3 text-right text-gray-200">${formatNum(r.total_sala)}</td>
-          <td class="px-4 py-3 text-right text-gray-200">${formatNum(r.total_tienda)}</td>
-          <td class="px-4 py-3 text-right text-gray-200">${formatNum(r.total_marley)}</td>
-        </tr>`).join('');
-
-      const totales = rows.reduce((acc, r) => {
-        acc.total_planeado     += Number(r.total_planeado) || 0;
-        acc.total_real         += Number(r.total_real) || 0;
-        acc.total_no_producido += Number(r.total_no_producido) || 0;
-        acc.total_sala         += Number(r.total_sala) || 0;
-        acc.total_tienda       += Number(r.total_tienda) || 0;
-        acc.total_marley       += Number(r.total_marley) || 0;
-        return acc;
-      }, {
-        total_planeado: 0,
-        total_real: 0,
-        total_no_producido: 0,
-        total_sala: 0,
-        total_tienda: 0,
-        total_marley: 0,
-      });
-
-      tfoot.innerHTML = `
-        <tr>
-          <td class="px-4 py-3 text-left font-black text-white">TOTAL GENERAL</td>
-          <td class="px-4 py-3 text-right font-black text-cyan-300">${formatNum(totales.total_planeado)}</td>
-          <td class="px-4 py-3 text-right font-black text-emerald-300">${formatNum(totales.total_real)}</td>
-          <td class="px-4 py-3 text-right font-black text-amber-300">${formatNum(totales.total_no_producido)}</td>
-          <td class="px-4 py-3 text-right font-black text-gray-100">${formatNum(totales.total_sala)}</td>
-          <td class="px-4 py-3 text-right font-black text-gray-100">${formatNum(totales.total_tienda)}</td>
-          <td class="px-4 py-3 text-right font-black text-gray-100">${formatNum(totales.total_marley)}</td>
+          <td class="px-4 py-3 text-right text-indigo-300 font-bold">${fmt(r.total_planificado)}</td>
+          <td class="px-4 py-3 text-right text-emerald-300 font-bold">${fmt(r.total_real)}</td>
+          <td class="px-4 py-3 text-right text-amber-300 font-bold">${fmt(r.total_no_producido)}</td>
+          ${destCols}
         </tr>`;
+      }).join('');
+
+      const totDestCols = destinos.map(d => `
+        <td class="px-4 py-3 text-right font-black text-purple-300">${fmt(totDest[d.destino_id].plan)}</td>
+        <td class="px-4 py-3 text-right font-black text-purple-200">${fmt(totDest[d.destino_id].real)}</td>
+      `).join('');
+
+      tfoot.innerHTML = `<tr>
+        <td class="px-4 py-3 text-left font-black text-white">TOTAL GENERAL</td>
+        <td class="px-4 py-3 text-right font-black text-indigo-300">${fmt(totales.planificado)}</td>
+        <td class="px-4 py-3 text-right font-black text-emerald-300">${fmt(totales.real)}</td>
+        <td class="px-4 py-3 text-right font-black text-amber-300">${fmt(totales.no_producido)}</td>
+        ${totDestCols}
+      </tr>`;
     }
 
     async function cargarResumen() {
       const fecha = fechaInput.value;
-      const tbody = document.getElementById('tbody-resumen');
-      tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500 animate-pulse">Cargando...</td></tr>';
+      document.getElementById('tbody-resumen').innerHTML =
+        '<tr><td colspan="10" class="px-4 py-8 text-center text-gray-500 animate-pulse">Cargando…</td></tr>';
       try {
-        const res = await fetch(`/api/resumen_diario?fecha=${fecha}`);
+        const res  = await fetch(`/api/v2/resumen_diario?fecha=${fecha}`);
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'No se pudo cargar el resumen.');
+        if (!res.ok) throw new Error(data.error || 'Error al cargar');
         renderTabla(Array.isArray(data) ? data : []);
       } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-red-400">Error de carga.</td></tr>';
+        document.getElementById('tbody-resumen').innerHTML =
+          '<tr><td colspan="10" class="px-4 py-8 text-center text-red-400">❌ Error al cargar datos de kitchen_db2.</td></tr>';
         showToast(e.message, 'err');
       }
     }
@@ -150,31 +175,24 @@
     async function descargarExcelDia() {
       const fecha = fechaInput.value;
       const btn = document.getElementById('btn-excel-dia');
-      btn.disabled = true;
-      btn.textContent = 'Generando...';
-
+      btn.disabled = true; btn.textContent = '⏳ Generando…';
       try {
-        const response = await fetch(`/api/informes/excel?fecha_inicio=${fecha}&fecha_fin=${fecha}`);
-        if (!response.ok) {
-          const err = await response.json().catch(() => ({ error: 'Error desconocido.' }));
-          throw new Error(err.error || 'Error del servidor.');
+        const r = await fetch(`/api/v2/informes/excel?fecha_inicio=${fecha}&fecha_fin=${fecha}`);
+        if (!r.ok) {
+          const e = await r.json().catch(() => ({ error: 'Error desconocido.' }));
+          throw new Error(e.error || 'Error del servidor.');
         }
-
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `produccion_${fecha}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+        const blob = await r.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = `produccion_v2_${fecha}.xlsx`;
+        document.body.appendChild(a); a.click(); a.remove();
         URL.revokeObjectURL(url);
-        showToast('Excel del día descargado correctamente.', 'ok');
+        showToast('✅ Excel descargado correctamente.', 'ok');
       } catch (e) {
-        showToast(e.message, 'err');
+        showToast('❌ ' + e.message, 'err');
       } finally {
-        btn.disabled = false;
-        btn.textContent = 'Descargar Excel del Día';
+        btn.disabled = false; btn.textContent = '⬇️ Descargar Excel del Día';
       }
     }
 

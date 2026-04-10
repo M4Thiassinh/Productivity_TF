@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>⚙️ Panel Admin – Kitchen Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.25s ease both; }
+    .hidden  { display: none !important; }
+  </style>
+</head>
+<body class="bg-gray-950 min-h-screen text-white p-4 md:p-8">
+
+  <!-- ── HEADER ── -->
+  <header class="flex flex-wrap items-center gap-4 mb-10 max-w-6xl mx-auto">
+    <a href="/"
+       class="flex items-center justify-center w-10 h-10 rounded-xl
+              bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white
+              transition-colors text-xl font-bold shrink-0">&#8592;</a>
+    <div class="flex-1 min-w-0">
+      <h1 class="text-3xl md:text-4xl font-black tracking-tight">
+        &#9881;&#65039; Panel de Administración
+      </h1>
+      <p class="text-gray-500 text-sm mt-1">
+        Gestión de Destinos y Productos · Kitchen Manager v2
+      </p>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="user-badge"
+            class="px-3 py-1 rounded-full text-xs font-bold bg-violet-900/60 border border-violet-700 text-violet-300">
+        👨‍💼 Administrador
+      </span>
+      <button onclick="logout()"
+              class="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700
+                     text-gray-300 rounded-lg transition-all border border-gray-700 text-sm font-semibold">
+        🚪 Salir
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto space-y-10">
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  SECCIÓN 1: DESTINOS                              -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <section class="bg-gray-900 border border-gray-800 rounded-3xl p-6 md:p-8 shadow-2xl">
+      <div class="flex flex-wrap items-center gap-4 mb-6 pb-5 border-b border-gray-800">
+        <div class="w-14 h-14 rounded-2xl bg-violet-900/60 border border-violet-700/50
+                    flex items-center justify-center text-3xl shrink-0">&#127981;</div>
+        <div>
+          <h2 class="text-2xl font-black">Centros de Distribución</h2>
+          <p class="text-gray-500 text-sm mt-0.5">
+            Define a qué destinos se distribuye la producción. Los cocineros verán estos destinos en el KDS.
+          </p>
+        </div>
+        <div class="ml-auto">
+          <span id="badge-total-destinos"
+                class="px-3 py-1 rounded-full text-sm font-bold bg-gray-800 border border-gray-700 text-gray-300">
+            — activos
+          </span>
+        </div>
+      </div>
+
+      <div class="flex gap-3 mb-5">
+        <input type="text" id="input-nuevo-destino"
+               placeholder="Ej: Banquete Marino, Buffet, Take Away…"
+               class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white
+                      focus:outline-none focus:border-violet-500 transition-colors text-sm"
+               onkeydown="if(event.key==='Enter') crearDestino()" />
+        <button onclick="crearDestino()" id="btn-crear-destino"
+                class="px-6 py-3 bg-violet-700 hover:bg-violet-600 active:bg-violet-800
+                       text-white font-black rounded-xl transition-all tracking-wide text-sm shrink-0">
+          + Crear
+        </button>
+      </div>
+      <div id="toast-destino" class="hidden mb-4 py-3 px-4 rounded-xl text-sm font-semibold"></div>
+
+      <div id="lista-destinos" class="space-y-2">
+        <div class="py-8 text-center text-gray-600 animate-pulse">&#9203; Cargando destinos…</div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!--  SECCIÓN 2: PRODUCTOS                             -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <section class="bg-gray-900 border border-gray-800 rounded-3xl p-6 md:p-8 shadow-2xl">
+      <div class="flex flex-wrap items-center gap-4 mb-6 pb-5 border-b border-gray-800">
+        <div class="w-14 h-14 rounded-2xl bg-emerald-900/60 border border-emerald-700/50
+                    flex items-center justify-center text-3xl shrink-0">&#128230;</div>
+        <div>
+          <h2 class="text-2xl font-black">Catálogo de Productos <span class="text-emerald-400 text-base font-bold">v2</span></h2>
+          <p class="text-gray-500 text-sm mt-0.5">
+            Registra y edita productos en kitchen_db2. Haz clic en ✏️ para modificar nombre, cuarto o envase.
+          </p>
+        </div>
+        <div class="ml-auto">
+          <span id="badge-total-productos"
+                class="px-3 py-1 rounded-full text-sm font-bold bg-gray-800 border border-gray-700 text-gray-300">
+            — productos
+          </span>
+        </div>
+      </div>
+
+      <!-- Formulario crear producto -->
+      <div class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 mb-6">
+        <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">Nuevo Producto</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <div>
+            <label class="text-gray-500 text-xs font-bold uppercase block mb-1">PLU ID</label>
+            <input type="text" id="np-plu" placeholder="Ej: 30384"
+                   class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5
+                          text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors" />
+          </div>
+          <div class="lg:col-span-2">
+            <label class="text-gray-500 text-xs font-bold uppercase block mb-1">Nombre</label>
+            <input type="text" id="np-nombre" placeholder="Ej: POKE SALMON"
+                   class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5
+                          text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors" />
+          </div>
+          <div>
+            <label class="text-gray-500 text-xs font-bold uppercase block mb-1">Cuarto</label>
+            <select id="np-cuarto"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5
+                           text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer">
+              <option value="Caliente">&#128293; Caliente</option>
+              <option value="Frío">&#10052;&#65039; Frío</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex gap-3">
+          <div class="flex-1">
+            <label class="text-gray-500 text-xs font-bold uppercase block mb-1">Envase (opcional)</label>
+            <input type="text" id="np-envase" placeholder="Ej: HALOPACK, ENSALADERA…"
+                   class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5
+                          text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors" />
+          </div>
+          <div class="flex items-end">
+            <button onclick="crearProducto()" id="btn-crear-producto"
+                    class="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800
+                           text-white font-black rounded-xl transition-all tracking-wide text-sm">
+              + Registrar
+            </button>
+          </div>
+        </div>
+      </div>
+      <div id="toast-producto" class="hidden mb-4 py-3 px-4 rounded-xl text-sm font-semibold"></div>
+
+      <!-- Buscador -->
+      <div class="mb-3">
+        <input type="text" id="buscador-producto" placeholder="🔍 Buscar producto por nombre o PLU…"
+               oninput="filtrarTabla()"
+               class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5
+                      text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors" />
+      </div>
+
+      <!-- Tabla de productos -->
+      <div class="overflow-auto rounded-xl border border-gray-800">
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="bg-gray-800 text-gray-400 text-xs uppercase tracking-widest">
+              <th class="px-4 py-3 text-left">PLU</th>
+              <th class="px-4 py-3 text-left">Nombre</th>
+              <th class="px-4 py-3 text-left">Cuarto</th>
+              <th class="px-4 py-3 text-left">Envase</th>
+              <th class="px-4 py-3 text-center">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-productos" class="divide-y divide-gray-800/80 bg-gray-900">
+            <tr>
+              <td colspan="5" class="px-4 py-8 text-center text-gray-600 animate-pulse">
+                &#9203; Cargando productos…
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!--  MODAL EDITAR PRODUCTO                            -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="modal-editar" class="hidden fixed inset-0 z-50 flex items-center justify-center
+                                 p-4 bg-black/70 backdrop-blur-sm">
+    <div class="w-full max-w-lg bg-gray-900 border border-indigo-700 rounded-2xl shadow-2xl fade-in">
+
+      <!-- Header modal -->
+      <div class="flex items-start justify-between px-6 py-5 border-b border-gray-800">
+        <div>
+          <p class="text-xs font-bold uppercase text-gray-500 mb-0.5">Editar Producto</p>
+          <h3 class="text-xl font-black text-white" id="modal-edit-plu-display"></h3>
+        </div>
+        <button onclick="cerrarModalEditar()"
+                class="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400
+                       hover:text-white transition-colors text-lg flex items-center justify-center">
+          ✕
+        </button>
+      </div>
+
+      <!-- Body modal -->
+      <div class="px-6 py-5 space-y-4">
+        <input type="hidden" id="modal-edit-id" />
+
+        <!-- Nombre -->
+        <div>
+          <label class="text-gray-400 text-xs font-bold uppercase block mb-1">Nombre del Producto</label>
+          <input type="text" id="modal-edit-nombre"
+                 class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5
+                        text-white font-semibold focus:outline-none focus:border-indigo-500 transition-colors" />
+        </div>
+
+        <!-- Cuarto -->
+        <div>
+          <label class="text-gray-400 text-xs font-bold uppercase block mb-1">Cuarto</label>
+          <div class="grid grid-cols-2 gap-3">
+            <label id="radio-caliente-label"
+                   class="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-700
+                          cursor-pointer hover:border-orange-600 transition-colors">
+              <input type="radio" name="modal-edit-cuarto" value="Caliente" id="radio-caliente"
+                     onchange="actualizarEstiloCuarto()" class="accent-orange-500 w-4 h-4" />
+              <span class="text-base">🔥</span>
+              <span class="font-bold text-sm">Caliente</span>
+            </label>
+            <label id="radio-frio-label"
+                   class="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-700
+                          cursor-pointer hover:border-sky-600 transition-colors">
+              <input type="radio" name="modal-edit-cuarto" value="Frío" id="radio-frio"
+                     onchange="actualizarEstiloCuarto()" class="accent-sky-500 w-4 h-4" />
+              <span class="text-base">❄️</span>
+              <span class="font-bold text-sm">Frío</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Envase -->
+        <div>
+          <label class="text-gray-400 text-xs font-bold uppercase block mb-1">
+            Envase
+            <span class="normal-case text-gray-600 font-normal">(opcional)</span>
+          </label>
+          <input type="text" id="modal-edit-envase" placeholder="Ej: HALOPACK, KRAFT 26OZ, C10…"
+                 class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5
+                        text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+        </div>
+      </div>
+
+      <!-- Toast del modal -->
+      <div id="toast-modal-edit" class="hidden mx-6 mb-2 py-2 px-4 rounded-xl text-xs font-semibold"></div>
+
+      <!-- Footer modal -->
+      <div class="px-6 pb-6 flex gap-3">
+        <button onclick="cerrarModalEditar()"
+                class="flex-1 px-4 py-3 rounded-xl bg-gray-800 hover:bg-gray-700
+                       text-white font-bold transition-colors">
+          Cancelar
+        </button>
+        <button onclick="guardarEdicion()" id="btn-guardar-edicion"
+                class="flex-1 px-4 py-3 rounded-xl bg-indigo-700 hover:bg-indigo-600
+                       text-white font-black transition-colors">
+          ✅ Guardar Cambios
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <p class="text-center text-gray-700 text-xs mt-10 pb-4">
+    Kitchen Manager v2 · Panel de Administración · Uso interno
+  </p>
+
+  <script>
+    // ══════════════════════════════════════════════════════════
+    //  AUTH CHECK
+    // ══════════════════════════════════════════════════════════
+    async function checkAuth() {
+      try {
+        const res  = await fetch('/api/auth/check');
+        const data = await res.json();
+        if (!data.authenticated) { window.location.href = '/login.html'; return false; }
+        if (data.role !== 'admin') { window.location.href = '/'; return false; }
+        return true;
+      } catch { window.location.href = '/login.html'; return false; }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  HELPERS
+    // ══════════════════════════════════════════════════════════
+    function showToast(id, msg, tipo) {
+      const el = document.getElementById(id);
+      const ok  = 'py-3 px-4 rounded-xl text-sm font-semibold bg-emerald-900 text-emerald-300 border border-emerald-700 fade-in';
+      const err = 'py-3 px-4 rounded-xl text-sm font-semibold bg-red-900 text-red-300 border border-red-700 fade-in';
+      el.className = tipo === 'ok' ? ok : err;
+      el.textContent = msg;
+      clearTimeout(el._t);
+      el._t = setTimeout(() => { el.classList.add('hidden'); }, 4500);
+    }
+
+    async function logout() {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  DESTINOS
+    // ══════════════════════════════════════════════════════════
+    async function cargarDestinos() {
+      try {
+        const res   = await fetch('/api/v2/destinos');
+        const items = await res.json();
+        renderDestinos(items);
+      } catch {
+        document.getElementById('lista-destinos').innerHTML =
+          '<p class="text-red-400 text-sm text-center py-4">&#10060; Error al cargar destinos.</p>';
+      }
+    }
+
+    function renderDestinos(items) {
+      const el = document.getElementById('lista-destinos');
+      document.getElementById('badge-total-destinos').textContent = `${items.length} activo(s)`;
+      if (!items.length) {
+        el.innerHTML = `
+          <div class="text-center py-10 border-2 border-dashed border-gray-800 rounded-2xl">
+            <div class="text-4xl mb-3">&#127381;</div>
+            <p class="text-gray-500 font-semibold">Sin destinos activos</p>
+            <p class="text-gray-700 text-xs mt-1">Crea el primero usando el campo de arriba.</p>
+          </div>`;
+        return;
+      }
+      el.innerHTML = items.map((d, i) => `
+        <div class="flex items-center justify-between px-4 py-3
+                     bg-gray-800/40 hover:bg-gray-800/70 border border-gray-800
+                     rounded-xl transition-colors fade-in"
+             style="animation-delay:${i * 40}ms">
+          <div class="flex items-center gap-3">
+            <span class="w-7 h-7 rounded-lg bg-violet-900/60 border border-violet-700/50
+                         flex items-center justify-center text-xs font-black text-violet-400">
+              ${d.id}
+            </span>
+            <span class="font-semibold text-white">${d.nombre}</span>
+          </div>
+          <button onclick="eliminarDestino(${d.id}, '${d.nombre}')"
+                  class="px-3 py-1 rounded-lg bg-red-900/40 hover:bg-red-900/80 border border-red-800/50
+                         text-red-400 text-xs font-bold transition-all">
+            &#128465; Desactivar
+          </button>
+        </div>`).join('');
+    }
+
+    async function crearDestino() {
+      const input  = document.getElementById('input-nuevo-destino');
+      const nombre = input.value.trim();
+      if (!nombre) { showToast('toast-destino', '&#9888; Escribe un nombre para el destino.', 'err'); return; }
+      const btn = document.getElementById('btn-crear-destino');
+      btn.textContent = '…'; btn.disabled = true;
+      try {
+        const res  = await fetch('/api/v2/destinos', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast('toast-destino', `&#10003; Destino "${data.nombre}" creado.`, 'ok');
+          input.value = '';
+          await cargarDestinos();
+        } else { showToast('toast-destino', '&#10060; ' + (data.error || 'Error al crear.'), 'err'); }
+      } catch { showToast('toast-destino', '&#10060; Error de conexión.', 'err'); }
+      finally  { btn.textContent = '+ Crear'; btn.disabled = false; }
+    }
+
+    async function eliminarDestino(id, nombre) {
+      if (!confirm(`¿Desactivar el destino "${nombre}"?\nNo se eliminará del historial pero dejará de aparecer en el KDS.`)) return;
+      try {
+        const res = await fetch(`/api/v2/destinos/${id}`, { method: 'DELETE' });
+        if (res.ok) { showToast('toast-destino', `Destino "${nombre}" desactivado.`, 'ok'); await cargarDestinos(); }
+      } catch { showToast('toast-destino', '&#10060; Error al desactivar.', 'err'); }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PRODUCTOS
+    // ══════════════════════════════════════════════════════════
+    let todosProductos = [];
+
+    async function cargarProductos() {
+      try {
+        const res   = await fetch('/api/v2/productos');
+        todosProductos = await res.json();
+        renderProductos(todosProductos);
+      } catch {
+        document.getElementById('tbody-productos').innerHTML =
+          '<tr><td colspan="5" class="px-4 py-6 text-center text-red-400">&#10060; Error al cargar productos.</td></tr>';
+      }
+    }
+
+    function renderProductos(items) {
+      const tbody = document.getElementById('tbody-productos');
+      document.getElementById('badge-total-productos').textContent = `${items.length} producto(s)`;
+
+      if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-10 text-center text-gray-600">Sin productos en kitchen_db2.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = items.map((p, i) => {
+        const cuartoIcon  = p.cuarto === 'Caliente' ? '&#128293;' : '&#10052;&#65039;';
+        const cuartoClass = p.cuarto === 'Caliente'
+          ? 'bg-orange-900/60 text-orange-300 border-orange-800/50'
+          : 'bg-sky-900/60 text-sky-300 border-sky-800/50';
+        return `
+          <tr class="hover:bg-gray-800/40 transition-colors ${i % 2 === 0 ? '' : 'bg-gray-900/40'}"
+              data-nombre="${p.nombre.toLowerCase()}" data-plu="${p.plu.toLowerCase()}">
+            <td class="px-4 py-3 font-mono text-xs text-gray-500">${p.plu}</td>
+            <td class="px-4 py-3 font-semibold text-white">${p.nombre}</td>
+            <td class="px-4 py-3">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-bold ${cuartoClass}">
+                ${cuartoIcon} ${p.cuarto}
+              </span>
+            </td>
+            <td class="px-4 py-3 text-gray-400 text-xs">${p.envase || '—'}</td>
+            <td class="px-4 py-3 text-center">
+              <button onclick='abrirModalEditar(${JSON.stringify(p)})'
+                      class="px-3 py-1.5 rounded-lg bg-indigo-900/50 hover:bg-indigo-800/80
+                             border border-indigo-700/60 text-indigo-300 text-xs font-bold
+                             transition-all hover:text-white">
+                ✏️ Editar
+              </button>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+    function filtrarTabla() {
+      const q = document.getElementById('buscador-producto').value.toLowerCase().trim();
+      if (!q) { renderProductos(todosProductos); return; }
+      const filtrados = todosProductos.filter(p =>
+        p.nombre.toLowerCase().includes(q) || p.plu.toLowerCase().includes(q)
+      );
+      renderProductos(filtrados);
+    }
+
+    async function crearProducto() {
+      const plu    = document.getElementById('np-plu').value.trim();
+      const nombre = document.getElementById('np-nombre').value.trim();
+      const cuarto = document.getElementById('np-cuarto').value;
+      const envase = document.getElementById('np-envase').value.trim();
+      if (!plu || !nombre) { showToast('toast-producto', '&#9888; PLU y Nombre son requeridos.', 'err'); return; }
+      const btn = document.getElementById('btn-crear-producto');
+      btn.textContent = '…'; btn.disabled = true;
+      try {
+        const res  = await fetch('/api/v2/productos', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plu, nombre: nombre.toUpperCase(), cuarto, envase })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast('toast-producto', `&#10003; Producto "${nombre.toUpperCase()}" registrado.`, 'ok');
+          document.getElementById('np-plu').value    = '';
+          document.getElementById('np-nombre').value = '';
+          document.getElementById('np-envase').value = '';
+          await cargarProductos();
+        } else { showToast('toast-producto', '&#10060; ' + (data.error || 'Error al registrar.'), 'err'); }
+      } catch { showToast('toast-producto', '&#10060; Error de conexión.', 'err'); }
+      finally  { btn.textContent = '+ Registrar'; btn.disabled = false; }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  MODAL EDITAR PRODUCTO
+    // ══════════════════════════════════════════════════════════
+    function abrirModalEditar(producto) {
+      document.getElementById('modal-edit-id').value              = producto.id;
+      document.getElementById('modal-edit-plu-display').textContent = `PLU: ${producto.plu}`;
+      document.getElementById('modal-edit-nombre').value          = producto.nombre;
+      document.getElementById('modal-edit-envase').value          = producto.envase || '';
+
+      // Seleccionar el radio correcto
+      if (producto.cuarto === 'Caliente') {
+        document.getElementById('radio-caliente').checked = true;
+      } else {
+        document.getElementById('radio-frio').checked = true;
+      }
+      actualizarEstiloCuarto();
+
+      document.getElementById('toast-modal-edit').classList.add('hidden');
+      document.getElementById('modal-editar').classList.remove('hidden');
+      setTimeout(() => document.getElementById('modal-edit-nombre').focus(), 100);
+    }
+
+    function cerrarModalEditar() {
+      document.getElementById('modal-editar').classList.add('hidden');
+    }
+
+    function actualizarEstiloCuarto() {
+      const caliente = document.getElementById('radio-caliente').checked;
+      document.getElementById('radio-caliente-label').className =
+        `flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer transition-colors ${
+          caliente ? 'border-orange-500 bg-orange-900/20' : 'border-gray-700 hover:border-orange-600'
+        }`;
+      document.getElementById('radio-frio-label').className =
+        `flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer transition-colors ${
+          !caliente ? 'border-sky-500 bg-sky-900/20' : 'border-gray-700 hover:border-sky-600'
+        }`;
+    }
+
+    async function guardarEdicion() {
+      const id     = document.getElementById('modal-edit-id').value;
+      const nombre = document.getElementById('modal-edit-nombre').value.trim();
+      const envase = document.getElementById('modal-edit-envase').value.trim();
+      const cuarto = document.querySelector('input[name="modal-edit-cuarto"]:checked')?.value;
+
+      if (!nombre || !cuarto) {
+        const toastEl = document.getElementById('toast-modal-edit');
+        toastEl.className = 'mx-6 mb-2 py-2 px-4 rounded-xl text-xs font-semibold bg-red-900 text-red-300 border border-red-700';
+        toastEl.textContent = '⚠️ Nombre y Cuarto son obligatorios.';
+        return;
+      }
+
+      const btn = document.getElementById('btn-guardar-edicion');
+      btn.textContent = '⏳ Guardando…'; btn.disabled = true;
+
+      try {
+        const res  = await fetch(`/api/v2/productos/${id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre: nombre.toUpperCase(), cuarto, envase })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          cerrarModalEditar();
+          showToast('toast-producto', `✅ Producto actualizado correctamente.`, 'ok');
+          await cargarProductos();
+        } else {
+          const toastEl = document.getElementById('toast-modal-edit');
+          toastEl.className = 'mx-6 mb-2 py-2 px-4 rounded-xl text-xs font-semibold bg-red-900 text-red-300 border border-red-700';
+          toastEl.textContent = '❌ ' + (data.error || 'Error al guardar.');
+        }
+      } catch {
+        const toastEl = document.getElementById('toast-modal-edit');
+        toastEl.className = 'mx-6 mb-2 py-2 px-4 rounded-xl text-xs font-semibold bg-red-900 text-red-300 border border-red-700';
+        toastEl.textContent = '❌ Error de conexión.';
+      }
+      btn.textContent = '✅ Guardar Cambios'; btn.disabled = false;
+    }
+
+    // Cerrar modal al hacer clic fuera
+    document.getElementById('modal-editar').addEventListener('click', function(e) {
+      if (e.target === this) cerrarModalEditar();
+    });
+
+    // Guardar con Enter en los inputs del modal
+    ['modal-edit-nombre', 'modal-edit-envase'].forEach(id => {
+      document.getElementById(id).addEventListener('keydown', e => {
+        if (e.key === 'Enter') guardarEdicion();
+      });
+    });
+
+    // ══════════════════════════════════════════════════════════
+    //  INIT
+    // ══════════════════════════════════════════════════════════
+    (async () => {
+      const ok = await checkAuth();
+      if (!ok) return;
+      await Promise.all([cargarDestinos(), cargarProductos()]);
+    })();
+  </script>
+</body>
+</html>

@@ -98,12 +98,12 @@
           <span class="text-2xl">&#127859;</span>
           <span class="text-xs font-bold text-orange-300">Registro</span>
         </a>
-        <a href="/planificacion.html"
+        <a href="/planificacion2.html"
            class="flex flex-col items-center justify-center gap-2 py-4
                   bg-blue-900/40 hover:bg-blue-900/70 border border-blue-800/50
                   rounded-2xl transition-colors text-center">
           <span class="text-2xl">&#128203;</span>
-          <span class="text-xs font-bold text-blue-300">Planificación</span>
+          <span class="text-xs font-bold text-blue-300">Planificación v2</span>
         </a>
       </div>
     </div>
@@ -168,7 +168,7 @@
       showToast('⏳ Consultando la base de datos, un momento...', 'info', 0);
 
       try {
-        const response = await fetch(`/api/informes/excel?fecha_inicio=${encodeURIComponent(desde)}&fecha_fin=${encodeURIComponent(hasta)}`);
+        const response = await fetch(`/api/v2/informes/excel?fecha_inicio=${encodeURIComponent(desde)}&fecha_fin=${encodeURIComponent(hasta)}`);
 
         if (!response.ok) {
           const errData = await response.json().catch(() => ({ error: 'Error desconocido del servidor.' }));

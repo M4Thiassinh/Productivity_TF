@@ -10,21 +10,18 @@
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.02); }
     }
-    .en-preparacion {
-      animation: pulse 2s ease-in-out infinite;
-    }
+    .en-preparacion { animation: pulse 2s ease-in-out infinite; }
   </style>
 </head>
 <body class="bg-gray-950 min-h-screen p-3 md:p-6">
 
-  <!-- HEADER SIN BOTÓN DE VOLVER -->
   <header class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
     <div>
       <h1 class="text-2xl md:text-4xl font-black text-white tracking-tight">📺 KDS - Todos los Cuartos</h1>
       <p class="text-gray-500 text-xs md:text-sm" id="fecha-display"></p>
     </div>
 
-    <!-- MÉTRICAS GLOBALES DEL CUARTO -->
+    <!-- MÉTRICAS GLOBALES -->
     <div class="bg-gradient-to-br from-violet-900/40 to-purple-800/20 border-2 border-violet-600 rounded-2xl px-4 py-3 md:px-6 md:py-4">
       <div class="text-xs text-violet-400 font-bold uppercase tracking-wider mb-1">Producción Total</div>
       <div class="flex items-baseline gap-2">
@@ -34,7 +31,7 @@
       </div>
       <div class="mt-1">
         <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
-          <div id="barra-progreso" class="h-full bg-gradient-to-r from-violet-500 to-purple-400 transition-all duration-500" style="width: 0%"></div>
+          <div id="barra-progreso" class="h-full bg-gradient-to-r from-violet-500 to-purple-400 transition-all duration-500" style="width:0%"></div>
         </div>
       </div>
     </div>
@@ -52,11 +49,8 @@
   </header>
 
   <div id="banner-estado" class="hidden mb-4 text-center py-3 rounded-xl font-bold text-base"></div>
-
-  <!-- GRID MOBILE-FIRST: 1 columna en móvil, 2-3 en desktop -->
   <main id="kds-root" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4"></main>
 
-  <!-- DATALIST COCINEROS -->
   <datalist id="lista-cocineros"></datalist>
 
   <!-- MODAL INICIAR -->
@@ -93,22 +87,21 @@
           <p class="text-sm text-gray-400 mt-1" id="modal-finalizar-plan"></p>
         </div>
         <button onclick="cerrarModalFinalizar()"
-                class="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-lg">
-          ✕
-        </button>
+                class="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-lg">✕</button>
       </div>
-      <div class="p-5 space-y-3">
+      <div class="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
         <!-- Cocinero -->
         <div>
           <label class="text-gray-400 text-xs font-bold uppercase block mb-1">Cocinero</label>
           <input id="input-cocinero" list="lista-cocineros" type="text" autocomplete="off"
                  class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-violet-500" />
         </div>
-        <!-- Cantidad Real -->
+        <!-- Cantidades por destino (dinámico) -->
         <div>
-          <label class="text-gray-400 text-xs font-bold uppercase block mb-1">Cantidad Real Producida</label>
-          <input id="input-real" type="number" min="0"
-                 class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-lg font-bold focus:outline-none focus:border-emerald-500" />
+          <label class="text-gray-400 text-xs font-bold uppercase block mb-2">
+            📦 Cantidad producida por destino
+          </label>
+          <div id="destinos-inputs" class="grid grid-cols-2 sm:grid-cols-3 gap-2"></div>
         </div>
         <!-- No Producido -->
         <div>
@@ -119,7 +112,7 @@
         <!-- Comentarios -->
         <div>
           <label class="text-gray-400 text-xs font-bold uppercase block mb-1">Comentarios</label>
-          <textarea id="input-comentarios" rows="3"
+          <textarea id="input-comentarios" rows="2"
                     class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white resize-none focus:outline-none focus:border-gray-500"></textarea>
         </div>
       </div>
@@ -144,9 +137,10 @@
       return local.toISOString().slice(0, 10);
     };
     const today = getLocalISODate();
-    let segundos = 0;
+    let segundos  = 0;
     let cocineros = [];
-    let itemsKds = [];
+    let destinos  = [];
+    let itemsKds  = [];
     let itemActual = null;
 
     document.getElementById('fecha-display').textContent = new Date().toLocaleDateString('es-PE', {
@@ -154,50 +148,33 @@
     });
 
     // ══════════════════════════════════════════════════════════
-    //  FUNCIONES DE ESTADO
+    //  ESTADO DE CADA TARJETA
     // ══════════════════════════════════════════════════════════
     function estadoItem(item) {
-      // Listo: tiene hora_fin
-      if (item.hora_fin) {
-        return {
-          estado: 'listo',
-          card: 'border-emerald-600 bg-emerald-950/40',
-          badge: 'bg-emerald-900 text-emerald-300',
-          numClass: 'text-emerald-300',
-          badgeText: '✓ Listo',
-          clickable: false
-        };
-      }
-      // En Preparación: tiene hora_inicio pero no hora_fin
-      if (item.hora_inicio) {
-        return {
-          estado: 'en-preparacion',
-          card: 'border-yellow-600 bg-yellow-950/30 en-preparacion',
-          badge: 'bg-yellow-900 text-yellow-300',
-          numClass: 'text-yellow-300',
-          badgeText: '🔥 En Preparación',
-          clickable: true
-        };
-      }
-      // Pendiente: color según tipo de cuarto
-      const isPendiente = !item.hora_inicio;
-      if (item.tipo_cuarto === 'Caliente') {
-        return {
-          estado: 'pendiente',
-          card: 'border-orange-700 bg-gray-900',
-          badge: 'bg-orange-900 text-orange-300',
-          numClass: 'text-orange-300',
-          badgeText: 'Pendiente',
-          clickable: true
-        };
-      }
+      if (item.hora_fin) return {
+        estado: 'listo', clickable: false,
+        card: 'border-emerald-600 bg-emerald-950/40',
+        badge: 'bg-emerald-900 text-emerald-300',
+        numClass: 'text-emerald-300', badgeText: '✓ Listo'
+      };
+      if (item.hora_inicio) return {
+        estado: 'en-preparacion', clickable: true,
+        card: 'border-yellow-600 bg-yellow-950/30 en-preparacion',
+        badge: 'bg-yellow-900 text-yellow-300',
+        numClass: 'text-yellow-300', badgeText: '🔥 En Preparación'
+      };
+      // Color según cuarto
+      if (item.cuarto === 'Caliente') return {
+        estado: 'pendiente', clickable: true,
+        card: 'border-orange-700 bg-gray-900',
+        badge: 'bg-orange-900 text-orange-300',
+        numClass: 'text-orange-300', badgeText: 'Pendiente'
+      };
       return {
-        estado: 'pendiente',
+        estado: 'pendiente', clickable: true,
         card: 'border-sky-700 bg-gray-900',
         badge: 'bg-sky-900 text-sky-300',
-        numClass: 'text-sky-300',
-        badgeText: 'Pendiente',
-        clickable: true
+        numClass: 'text-sky-300', badgeText: 'Pendiente'
       };
     }
 
@@ -207,29 +184,29 @@
     function renderCard(item) {
       const s = estadoItem(item);
       const envase = item.envase || 'Sin envase';
-      const division = `Tienda: ${item.cant_tienda} | Sala: ${item.cant_sala} | Marley: ${item.cant_marley}`;
+      // División dinámica de destinos
+      const division = item.destinos && item.destinos.length
+        ? item.destinos.map(d => `${d.nombre}: ${d.cantidad}`).join(' | ')
+        : '—';
       const progreso = `${item.total_producido} / ${item.total_planificado}`;
-      const cuartoIcon = item.tipo_cuarto === 'Caliente' ? '🔥' : '❄️';
-
+      const cuartoIcon = item.cuarto === 'Caliente' ? '🔥' : '❄️';
       const cursorClass = s.clickable ? 'cursor-pointer hover:brightness-110' : 'opacity-70';
-      const onclickAttr = s.clickable ? `onclick="abrirModal('${item.plu_id}', '${s.estado}')"` : '';
+      const onclickAttr = s.clickable ? `onclick="abrirModal(${item.producto_id}, '${s.estado}')"` : '';
 
       return `
         <button ${onclickAttr}
                 class="w-full text-left border-2 ${s.card} rounded-xl p-4 transition-all ${cursorClass}"
-                data-plu="${item.plu_id}">
+                data-pid="${item.producto_id}">
           <div class="flex items-start justify-between gap-2 mb-3">
             <span class="inline-block text-xs font-bold px-2 py-1 rounded-full ${s.badge}">
               ${s.badgeText}
             </span>
             <div class="text-right">
-              <div class="text-xs text-gray-500">${cuartoIcon} ${item.tipo_cuarto}</div>
-              <div class="text-lg font-black text-white">${envase}</div>
+              <div class="text-xs text-gray-500">${cuartoIcon} ${item.cuarto}</div>
+              <div class="text-base font-black text-white">${envase}</div>
             </div>
           </div>
-          <h3 class="text-white text-lg md:text-xl font-black leading-tight mb-3">
-            ${item.nombre}
-          </h3>
+          <h3 class="text-white text-lg md:text-xl font-black leading-tight mb-3">${item.nombre}</h3>
           <div class="text-xs text-gray-400 mb-2">${division}</div>
           <div class="flex items-end justify-between">
             <div>
@@ -244,7 +221,7 @@
     }
 
     function renderKDS() {
-      const root = document.getElementById('kds-root');
+      const root   = document.getElementById('kds-root');
       const banner = document.getElementById('banner-estado');
 
       if (!itemsKds.length) {
@@ -252,40 +229,32 @@
         banner.textContent = 'Sin planificación activa para hoy';
         banner.classList.remove('hidden');
         root.innerHTML = '';
-        actualizarMetricasGlobales(0, 0);
+        actualizarMetricas(0, 0);
         return;
       }
-
       banner.classList.add('hidden');
       root.innerHTML = itemsKds.map(renderCard).join('');
 
-      // Calcular métricas globales
-      const totales = itemsKds.reduce((acc, item) => {
-        acc.producido += item.total_producido || 0;
-        acc.planificado += item.total_planificado || 0;
+      const totales = itemsKds.reduce((acc, i) => {
+        acc.producido   += Number(i.total_producido)   || 0;
+        acc.planificado += Number(i.total_planificado) || 0;
         return acc;
       }, { producido: 0, planificado: 0 });
-
-      actualizarMetricasGlobales(totales.producido, totales.planificado);
+      actualizarMetricas(totales.producido, totales.planificado);
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  ACTUALIZAR MÉTRICAS GLOBALES
-    // ══════════════════════════════════════════════════════════
-    function actualizarMetricasGlobales(producido, planificado) {
-      document.getElementById('total-producido').textContent = producido;
+    function actualizarMetricas(producido, planificado) {
+      document.getElementById('total-producido').textContent   = producido;
       document.getElementById('total-planificado').textContent = planificado;
-
-      // Calcular porcentaje para la barra de progreso
-      const porcentaje = planificado > 0 ? Math.round((producido / planificado) * 100) : 0;
-      document.getElementById('barra-progreso').style.width = porcentaje + '%';
+      const pct = planificado > 0 ? Math.round((producido / planificado) * 100) : 0;
+      document.getElementById('barra-progreso').style.width = pct + '%';
     }
 
     // ══════════════════════════════════════════════════════════
-    //  MODAL INICIAR
+    //  MODALES
     // ══════════════════════════════════════════════════════════
-    function abrirModal(plu_id, estado) {
-      itemActual = itemsKds.find(i => i.plu_id === plu_id);
+    function abrirModal(producto_id, estado) {
+      itemActual = itemsKds.find(i => i.producto_id === producto_id);
       if (!itemActual) return;
 
       if (estado === 'pendiente') {
@@ -296,103 +265,105 @@
         document.getElementById('modal-finalizar-nombre').textContent = itemActual.nombre;
         document.getElementById('modal-finalizar-envase').textContent = itemActual.envase || 'Sin envase';
         document.getElementById('modal-finalizar-plan').textContent =
-          `Total planificado: ${itemActual.total_planificado} | Producido: ${itemActual.total_producido}`;
-        document.getElementById('input-real').value = '';
+          `Planificado: ${itemActual.total_planificado} | Producido: ${itemActual.total_producido}`;
         document.getElementById('input-no-producido').value = '';
-        document.getElementById('input-cocinero').value = '';
+        document.getElementById('input-cocinero').value    = '';
         document.getElementById('input-comentarios').value = '';
+
+        // Generar inputs dinámicos de destinos
+        const container = document.getElementById('destinos-inputs');
+        container.innerHTML = destinos.length
+          ? destinos.map(d => `
+              <div>
+                <label class="text-gray-500 text-xs font-bold block mb-0.5">${d.nombre}</label>
+                <input type="number" min="0" id="dest-${d.id}" value=""
+                       placeholder="0"
+                       oninput="recalcularNoProducido()"
+                       class="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-2
+                              text-white font-bold text-center focus:outline-none focus:border-emerald-500" />
+              </div>`).join('')
+          : '<p class="text-gray-600 text-xs col-span-full">Sin destinos configurados en BD2.</p>';
+
         document.getElementById('modal-finalizar').classList.remove('hidden');
       }
     }
 
-    function cerrarModalIniciar() {
-      document.getElementById('modal-iniciar').classList.add('hidden');
-      itemActual = null;
+    function recalcularNoProducido() {
+      if (!itemActual) return;
+      const plan = Number(itemActual.total_planificado) || 0;
+      const suma  = destinos.reduce((s, d) => {
+        return s + (parseInt(document.getElementById(`dest-${d.id}`)?.value) || 0);
+      }, 0);
+      const diff = Math.max(0, plan - suma);
+      document.getElementById('input-no-producido').value = diff > 0 ? diff : '';
     }
 
-    function cerrarModalFinalizar() {
-      document.getElementById('modal-finalizar').classList.add('hidden');
-      itemActual = null;
-    }
+    function cerrarModalIniciar()   { document.getElementById('modal-iniciar').classList.add('hidden');   itemActual = null; }
+    function cerrarModalFinalizar() { document.getElementById('modal-finalizar').classList.add('hidden'); itemActual = null; }
 
     async function confirmarIniciar() {
       if (!itemActual) return;
       try {
-        const res = await fetch('/api/produccion/iniciar', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fecha: today, plu_id: itemActual.plu_id })
+        const res  = await fetch('/api/v2/produccion/iniciar', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fecha: today, producto_id: itemActual.producto_id })
         });
         const data = await res.json();
-        if (data.success) {
-          cerrarModalIniciar();
-          await cargarDatos();
-        } else {
-          alert('Error: ' + (data.error || 'No se pudo iniciar'));
-        }
-      } catch (e) {
-        alert('Error de conexión');
-      }
+        if (data.success) { cerrarModalIniciar(); await cargarDatos(); }
+        else alert('Error: ' + (data.error || 'No se pudo iniciar'));
+      } catch { alert('Error de conexión'); }
     }
 
     async function confirmarFinalizar() {
       if (!itemActual) return;
-
-      const cantidad_real = parseInt(document.getElementById('input-real').value) || 0;
-      const no_producido = parseInt(document.getElementById('input-no-producido').value) || 0;
+      const no_producido   = parseInt(document.getElementById('input-no-producido').value) || 0;
       const cocineroNombre = document.getElementById('input-cocinero').value.trim();
-      const comentarios = document.getElementById('input-comentarios').value.trim();
+      const comentarios    = document.getElementById('input-comentarios').value.trim();
+      const cocinero       = cocineros.find(c => c.nombre === cocineroNombre);
+      const cocinero_id    = cocinero ? cocinero.id : null;
 
-      // Buscar ID del cocinero
-      const cocinero = cocineros.find(c => c.nombre === cocineroNombre);
-      const cocinero_id = cocinero ? cocinero.id : null;
+      // Recopilar cantidades por destino
+      const destinosPayload = destinos.map(d => ({
+        destino_id: d.id,
+        cantidad: parseInt(document.getElementById(`dest-${d.id}`)?.value) || 0
+      }));
+      const cantidad_real = destinosPayload.reduce((s, d) => s + d.cantidad, 0);
 
       try {
-        const res = await fetch('/api/produccion/finalizar', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+        const res  = await fetch('/api/v2/produccion/finalizar', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            fecha: today,
-            plu_id: itemActual.plu_id,
-            cantidad_real,
-            no_producido,
-            cocinero_id,
-            comentarios
+            fecha: today, producto_id: itemActual.producto_id,
+            cantidad_real, no_producido, cocinero_id, comentarios,
+            destinos: destinosPayload
           })
         });
         const data = await res.json();
-        if (data.success) {
-          cerrarModalFinalizar();
-          await cargarDatos();
-        } else {
-          alert('Error: ' + (data.error || 'No se pudo finalizar'));
-        }
-      } catch (e) {
-        alert('Error de conexión');
-      }
+        if (data.success) { cerrarModalFinalizar(); await cargarDatos(); }
+        else alert('Error: ' + (data.error || 'No se pudo finalizar'));
+      } catch { alert('Error de conexión'); }
     }
 
     // ══════════════════════════════════════════════════════════
-    //  CARGAR DATOS
+    //  CARGAR DATOS (v2 API)
     // ══════════════════════════════════════════════════════════
     async function cargarDatos() {
       try {
-        const [resKds, resCocineros] = await Promise.all([
-          fetch(`/api/planificacion/kds?fecha=${today}`),
-          fetch('/api/cocineros')
+        const [resKds, resCocineros, resDestinos] = await Promise.all([
+          fetch(`/api/v2/planificacion/kds?fecha=${today}`),
+          fetch('/api/v2/cocineros'),
+          fetch('/api/v2/destinos')
         ]);
-        itemsKds = await resKds.json();
-        cocineros = await resCocineros.json();
+        if (resKds.ok)        itemsKds  = await resKds.json();
+        if (resCocineros.ok)  cocineros = await resCocineros.json();
+        if (resDestinos.ok)   destinos  = await resDestinos.json();
 
-        // Llenar datalist
         const datalist = document.getElementById('lista-cocineros');
         datalist.innerHTML = cocineros.map(c => `<option value="${c.nombre}"></option>`).join('');
 
         renderKDS();
         document.getElementById('ultima-act').textContent = new Date().toLocaleTimeString('es-PE');
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) { console.error(e); }
     }
 
     // ══════════════════════════════════════════════════════════
@@ -400,8 +371,7 @@
     // ══════════════════════════════════════════════════════════
     function updateCountdown() {
       segundos = (segundos + 1) % REFRESH_INTERVAL;
-      const restantes = REFRESH_INTERVAL - segundos;
-      document.getElementById('countdown').textContent = restantes + 's';
+      document.getElementById('countdown').textContent = (REFRESH_INTERVAL - segundos) + 's';
       if (segundos === 0) cargarDatos();
     }
 

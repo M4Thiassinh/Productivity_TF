@@ -190,8 +190,10 @@ app.get('/login.html', (req, res) => {
 // ── PÁGINAS RESTRINGIDAS SOLO PARA ADMIN ──
 const adminPages = [
   '/planificacion.html',
-  '/registro.html', 
-  '/informes.html'
+  '/planificacion2.html',
+  '/registro.html',
+  '/informes.html',
+  '/admin.html'
 ];
 
 adminPages.forEach(page => {
@@ -243,6 +245,19 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit : 10,
   // Timezone eliminado: ahora manejamos todo en Node.js con dayjs + America/Santiago
+});
+
+// ══════════════════════════════════════════════════════════════
+//  POOL v2 – kitchen_db2 (Modelo Relacional Dinámico)
+// ══════════════════════════════════════════════════════════════
+const pool2 = mysql.createPool({
+  host            : process.env.DB_HOST     || 'localhost',
+  port            : Number(process.env.DB_PORT) || 3306,
+  user            : process.env.DB_USER     || 'root',
+  password        : process.env.DB_PASSWORD || '',
+  database        : process.env.DB2_NAME    || 'kitchen_db2',
+  waitForConnections: true,
+  connectionLimit : 10,
 });
 
 // ── Helper de errores ──────────────────────────────────────────
@@ -790,6 +805,638 @@ app.get('/api/informes/excel', async (req, res) => {
     await workbook.xlsx.write(res);
     res.end();
   } catch (e) { err500(res, e); }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  API v2 – RESUMEN DIARIO
+//  GET /api/v2/resumen_diario?fecha=YYYY-MM-DD
+//  Resumen consolidado por producto con desglose de destinos.
+// ══════════════════════════════════════════════════════════════
+app.get('/api/v2/resumen_diario', requireAuth, requireAdmin, async (req, res) => {
+  const fecha = req.query.fecha || getLocalISODate();
+  try {
+    // 1. Cabecera: totales por producto
+    const [rows] = await pool2.execute(
+      `SELECT
+         p.id          AS producto_id,
+         p.plu,
+         p.nombre,
+         p.cuarto,
+         p.envase,
+         COALESCE(SUM(pdd.cantidad), 0)          AS total_planificado,
+         COALESCE(pr.cantidad_real, 0)           AS total_real,
+         COALESCE(pr.no_producido, 0)            AS total_no_producido,
+         pr.hora_inicio,
+         pr.hora_fin,
+         COALESCE(c.nombre, '')                  AS cocinero,
+         COALESCE(pr.comentarios, '')            AS comentarios
+       FROM planificacion_diaria pd
+       JOIN productos p ON pd.producto_id = p.id
+       LEFT JOIN planificacion_destinos pdd ON pdd.planificacion_id = pd.id
+       LEFT JOIN produccion_real pr
+         ON pr.producto_id = pd.producto_id AND pr.fecha = pd.fecha
+       LEFT JOIN cocineros c ON c.id = pr.cocinero_id
+       WHERE pd.fecha = ?
+       GROUP BY p.id, p.plu, p.nombre, p.cuarto, p.envase,
+                pr.cantidad_real, pr.no_producido, pr.hora_inicio,
+                pr.hora_fin, c.nombre, pr.comentarios
+       HAVING COALESCE(SUM(pdd.cantidad), 0) > 0
+       ORDER BY p.nombre`,
+      [fecha]
+    );
+
+    if (!rows.length) return res.json([]);
+
+    // 2. Desglose por destino para cada producto
+    const productoIds = rows.map(r => r.producto_id);
+    const [destRows] = await pool2.execute(
+      `SELECT
+         pd.producto_id,
+         d.id         AS destino_id,
+         d.nombre     AS destino_nombre,
+         pdd.cantidad AS cantidad_planificada,
+         COALESCE(prod_d.cantidad, 0) AS cantidad_real
+       FROM planificacion_diaria pd
+       JOIN planificacion_destinos pdd ON pdd.planificacion_id = pd.id
+       JOIN destinos d ON d.id = pdd.destino_id
+       LEFT JOIN produccion_real pr
+         ON pr.producto_id = pd.producto_id AND pr.fecha = pd.fecha
+       LEFT JOIN produccion_destinos prod_d
+         ON prod_d.produccion_id = pr.id AND prod_d.destino_id = d.id
+       WHERE pd.fecha = ?
+         AND pd.producto_id IN (${productoIds.map(() => '?').join(',')})
+       ORDER BY d.id`,
+      [fecha, ...productoIds]
+    );
+
+    const result = rows.map(row => ({
+      ...row,
+      destinos: destRows
+        .filter(d => d.producto_id === row.producto_id)
+        .map(d => ({
+          destino_id          : d.destino_id,
+          nombre              : d.destino_nombre,
+          cantidad_planificada: d.cantidad_planificada,
+          cantidad_real       : d.cantidad_real,
+        }))
+    }));
+
+    res.json(result);
+  } catch (e) { err500(res, e); }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  API v2 – EXCEL INFORMES
+//  GET /api/v2/informes/excel?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
+//  Genera un .xlsx desde kitchen_db2 con columnas dinámicas de destinos.
+// ══════════════════════════════════════════════════════════════
+app.get('/api/v2/informes/excel', requireAuth, requireAdmin, async (req, res) => {
+  const fecha_inicio = req.query.fecha_inicio || req.query.desde;
+  const fecha_fin    = req.query.fecha_fin    || req.query.hasta;
+
+  const fechaRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!fecha_inicio || !fecha_fin || !fechaRegex.test(fecha_inicio) || !fechaRegex.test(fecha_fin))
+    return res.status(400).json({ error: 'Parámetros fecha_inicio y fecha_fin requeridos (YYYY-MM-DD).' });
+  if (fecha_inicio > fecha_fin)
+    return res.status(400).json({ error: '"fecha_inicio" no puede ser posterior a "fecha_fin".' });
+
+  try {
+    // Obtener destinos activos (para nombres de columnas dinámicas)
+    const [destinos] = await pool2.execute(
+      'SELECT id, nombre FROM destinos WHERE activo = 1 ORDER BY id'
+    );
+
+    // Consulta principal
+    const [rows] = await pool2.execute(
+      `SELECT
+         pr.fecha,
+         p.plu,
+         p.nombre,
+         p.cuarto,
+         p.envase,
+         pr.cantidad_real,
+         pr.no_producido,
+         pr.hora_inicio,
+         pr.hora_fin,
+         COALESCE(c.nombre, '') AS cocinero,
+         COALESCE(pr.comentarios, '') AS comentarios,
+         pr.id AS produccion_id
+       FROM produccion_real pr
+       JOIN productos p ON pr.producto_id = p.id
+       LEFT JOIN cocineros c ON c.id = pr.cocinero_id
+       WHERE pr.fecha BETWEEN ? AND ?
+       ORDER BY pr.fecha ASC, p.cuarto DESC, p.nombre ASC`,
+      [fecha_inicio, fecha_fin]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'No hay datos de producción en ese rango de fechas en kitchen_db2.' });
+    }
+
+    // Desglose por destino para cada produccion_id
+    const produccionIds = rows.map(r => r.produccion_id);
+    const [destDetalles] = await pool2.execute(
+      `SELECT produccion_id, destino_id, cantidad
+       FROM produccion_destinos
+       WHERE produccion_id IN (${produccionIds.map(() => '?').join(',')})`,
+      produccionIds
+    );
+
+    // También planificación por destino
+    const [planDetalles] = await pool2.execute(
+      `SELECT pd.producto_id, pd.fecha, pdd.destino_id, pdd.cantidad
+       FROM planificacion_diaria pd
+       JOIN planificacion_destinos pdd ON pdd.planificacion_id = pd.id
+       WHERE pd.fecha BETWEEN ? AND ?`,
+      [fecha_inicio, fecha_fin]
+    );
+
+    // ── Construir mapa de detalles
+    const prodMap = {};  // produccion_id → { destino_id: cantidad_real }
+    destDetalles.forEach(d => {
+      if (!prodMap[d.produccion_id]) prodMap[d.produccion_id] = {};
+      prodMap[d.produccion_id][d.destino_id] = d.cantidad;
+    });
+
+    const planMap = {};  // `${fecha}-${producto_id}` → { destino_id: cantidad_plan }
+    planDetalles.forEach(d => {
+      const key = `${d.fecha instanceof Date
+        ? dayjs(d.fecha).tz('America/Santiago').format('YYYY-MM-DD')
+        : String(d.fecha).slice(0, 10)}-${d.producto_id}`;
+      if (!planMap[key]) planMap[key] = {};
+      planMap[key][d.destino_id] = d.cantidad;
+    });
+
+    // ── Construir Excel
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Kitchen Manager v2';
+    const sheet = workbook.addWorksheet('Producción v2', {
+      views: [{ state: 'frozen', ySplit: 1 }],
+    });
+
+    // Columnas fijas + columnas dinámicas de destinos
+    const columnas = [
+      { header: 'Fecha',         key: 'fecha',         width: 14 },
+      { header: 'PLU',           key: 'plu',           width: 10 },
+      { header: 'Producto',      key: 'nombre',        width: 36 },
+      { header: 'Cuarto',        key: 'cuarto',        width: 12 },
+      { header: 'Envase',        key: 'envase',        width: 16 },
+    ];
+    // Columnas dinámicas: Plan Destino X y Real Destino X
+    destinos.forEach(d => {
+      columnas.push({ header: `Plan ${d.nombre}`, key: `plan_${d.id}`, width: 14 });
+    });
+    destinos.forEach(d => {
+      columnas.push({ header: `Real ${d.nombre}`, key: `real_${d.id}`, width: 14 });
+    });
+    columnas.push(
+      { header: 'Total Planificado', key: 'total_planificado', width: 18 },
+      { header: 'Total Real',        key: 'cantidad_real',      width: 14 },
+      { header: 'No Producido',      key: 'no_producido',       width: 14 },
+      { header: 'Hora Inicio',       key: 'hora_inicio',        width: 22 },
+      { header: 'Hora Fin',          key: 'hora_fin',           width: 22 },
+      { header: 'Cocinero',          key: 'cocinero',           width: 22 },
+      { header: 'Comentarios',       key: 'comentarios',        width: 34 },
+    );
+    sheet.columns = columnas;
+
+    // Estilo de cabecera
+    const headerRow = sheet.getRow(1);
+    headerRow.font      = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Filas de datos
+    rows.forEach((r, i) => {
+      const fechaStr = r.fecha
+        ? (r.fecha instanceof Date
+            ? dayjs(r.fecha).tz('America/Santiago').format('YYYY-MM-DD')
+            : String(r.fecha).slice(0, 10))
+        : '';
+
+      const fmtHora = (h) => {
+        if (!h) return '';
+        const base = typeof h === 'string' ? `${fechaStr} ${h}` : h;
+        return dayjs(base).tz('America/Santiago').format('DD/MM/YYYY, h:mm:ss A');
+      };
+
+      const planKey = `${fechaStr}-${r.produccion_id}`; // aproximación — usamos producion_id para mapear
+      // En realidad el plan se relaciona por fecha+producto_id; construimos la clave correctamente:
+      // Como no tenemos producto_id directamente aquí, lo buscamos en destDetalles
+      const myPlanMap = {};
+      planDetalles.forEach(pd => {
+        const pdFecha = pd.fecha instanceof Date
+          ? dayjs(pd.fecha).tz('America/Santiago').format('YYYY-MM-DD')
+          : String(pd.fecha).slice(0, 10);
+        // Necesitamos relacionar produccion_id → producto_id
+        // Simplificación: buscamos en destDetalles el producto via produccion_real
+        // La forma más directa ya la tenemos en rows
+        // En rows tenemos plu, buscamos producto_id desde planDetalles por fecha+plu
+      });
+
+      // Desglose producción real por destino
+      const realDest = prodMap[r.produccion_id] || {};
+
+      const rowObj = {
+        fecha    : fechaStr,
+        plu      : r.plu,
+        nombre   : r.nombre,
+        cuarto   : r.cuarto,
+        envase   : r.envase || '',
+        cantidad_real  : r.cantidad_real  || 0,
+        no_producido   : r.no_producido   || 0,
+        hora_inicio    : fmtHora(r.hora_inicio),
+        hora_fin       : fmtHora(r.hora_fin),
+        cocinero       : r.cocinero,
+        comentarios    : r.comentarios,
+        total_planificado: 0,
+      };
+
+      let totalPlan = 0;
+      destinos.forEach(d => {
+        rowObj[`real_${d.id}`] = realDest[d.id] || 0;
+        rowObj[`plan_${d.id}`] = 0; // relleno; se actualiza abajo
+      });
+
+      // Obtener planificación de este registro (via planDetalles)
+      planDetalles.forEach(pd => {
+        const pdFecha = pd.fecha instanceof Date
+          ? dayjs(pd.fecha).tz('America/Santiago').format('YYYY-MM-DD')
+          : String(pd.fecha).slice(0, 10);
+        // Relacionar por fecha: asumimos que el registro de producción ya está vinculado
+        if (pdFecha === fechaStr) {
+          rowObj[`plan_${pd.destino_id}`] = pd.cantidad || 0;
+          totalPlan += pd.cantidad || 0;
+        }
+      });
+      rowObj.total_planificado = r.cantidad_real + (r.no_producido || 0); // fallback si plan no coincide
+
+      const addedRow = sheet.addRow(rowObj);
+      if (i % 2 === 1) {
+        addedRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+      }
+    });
+
+    const filename = `produccion_v2_${fecha_inicio}_${fecha_fin}.xlsx`;
+    res.setHeader('Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (e) { err500(res, e); }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  MIDDLEWARE  API v2
+//  Todas las rutas /api/v2/* requieren autenticación.
+//  Crear/eliminar destinos y productos requiere admin.
+// ══════════════════════════════════════════════════════════════
+app.use('/api/v2/*', requireAuth);
+
+app.use('/api/v2/destinos', (req, res, next) => {
+  if (req.method !== 'GET') return requireAdmin(req, res, next);
+  next();
+});
+
+app.use('/api/v2/productos', (req, res, next) => {
+  if (req.method !== 'GET') return requireAdmin(req, res, next);
+  next();
+});
+
+app.use('/api/v2/planificacion', (req, res, next) => {
+  // GET /api/v2/planificacion/kds → accesible para staff (pantallas KDS)
+  if (req.method === 'GET' && req.originalUrl.includes('/kds')) return next();
+  return requireAdmin(req, res, next);
+});
+
+// ══════════════════════════════════════════════════════════════
+//  API v2 – DESTINOS
+// ══════════════════════════════════════════════════════════════
+
+// GET /api/v2/destinos → Lista todos los destinos activos
+app.get('/api/v2/destinos', async (req, res) => {
+  try {
+    const [rows] = await pool2.execute(
+      'SELECT id, nombre FROM destinos WHERE activo = 1 ORDER BY id'
+    );
+    res.json(rows);
+  } catch (e) { err500(res, e); }
+});
+
+// POST /api/v2/destinos → Crea un nuevo centro de distribución
+app.post('/api/v2/destinos', async (req, res) => {
+  const { nombre } = req.body;
+  if (!nombre || !nombre.trim())
+    return res.status(400).json({ error: 'El nombre del destino es requerido.' });
+  try {
+    const [result] = await pool2.execute(
+      'INSERT INTO destinos (nombre, activo) VALUES (?, 1)',
+      [nombre.trim()]
+    );
+    res.status(201).json({ success: true, id: result.insertId, nombre: nombre.trim() });
+  } catch (e) {
+    if (e.code === 'ER_DUP_ENTRY')
+      return res.status(409).json({ error: 'Ya existe un destino con ese nombre.' });
+    err500(res, e);
+  }
+});
+
+// DELETE /api/v2/destinos/:id → Desactiva (soft-delete) un destino
+app.delete('/api/v2/destinos/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool2.execute('UPDATE destinos SET activo = 0 WHERE id = ?', [Number(id)]);
+    res.json({ success: true });
+  } catch (e) { err500(res, e); }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  API v2 – COCINEROS
+// ══════════════════════════════════════════════════════════════
+
+// GET /api/v2/cocineros → Lista cocineros desde kitchen_db2
+app.get('/api/v2/cocineros', async (req, res) => {
+  try {
+    const [rows] = await pool2.execute('SELECT id, nombre FROM cocineros ORDER BY nombre');
+    res.json(rows);
+  } catch (e) { err500(res, e); }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  API v2 – PRODUCTOS
+// ══════════════════════════════════════════════════════════════
+
+// GET /api/v2/productos → Lista todos los productos de kitchen_db2
+app.get('/api/v2/productos', async (req, res) => {
+  try {
+    const [rows] = await pool2.execute(
+      'SELECT id, plu, nombre, cuarto, envase FROM productos ORDER BY cuarto, nombre'
+    );
+    res.json(rows);
+  } catch (e) { err500(res, e); }
+});
+
+// POST /api/v2/productos → Registra un producto en kitchen_db2
+app.post('/api/v2/productos', async (req, res) => {
+  const { plu, nombre, cuarto, envase } = req.body;
+  if (!plu || !nombre || !cuarto)
+    return res.status(400).json({ error: 'plu, nombre y cuarto son requeridos.' });
+  if (!['Frío', 'Caliente'].includes(cuarto))
+    return res.status(400).json({ error: 'cuarto debe ser "Frío" o "Caliente".' });
+  try {
+    const [result] = await pool2.execute(
+      'INSERT INTO productos (plu, nombre, cuarto, envase) VALUES (?, ?, ?, ?)',
+      [plu.trim(), nombre.trim(), cuarto, (envase || '').trim() || null]
+    );
+    res.status(201).json({ success: true, id: result.insertId });
+  } catch (e) {
+    if (e.code === 'ER_DUP_ENTRY')
+      return res.status(409).json({ error: 'Ya existe un producto con ese PLU.' });
+    err500(res, e);
+  }
+});
+
+// PUT /api/v2/productos/:id → Edita nombre, cuarto y/o envase de un producto
+app.put('/api/v2/productos/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { nombre, cuarto, envase } = req.body;
+  if (!nombre || !cuarto)
+    return res.status(400).json({ error: 'nombre y cuarto son requeridos.' });
+  if (!['Frío', 'Caliente'].includes(cuarto))
+    return res.status(400).json({ error: 'cuarto debe ser "Frío" o "Caliente".' });
+  try {
+    const [result] = await pool2.execute(
+      `UPDATE productos
+          SET nombre = ?, cuarto = ?, envase = ?
+        WHERE id = ?`,
+      [nombre.trim(), cuarto, (envase || '').trim() || null, Number(id)]
+    );
+    if (result.affectedRows === 0)
+      return res.status(404).json({ error: 'Producto no encontrado.' });
+    res.json({ success: true });
+  } catch (e) { err500(res, e); }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  API v2 – PLANIFICACIÓN
+// ══════════════════════════════════════════════════════════════
+
+// GET /api/v2/planificacion/kds?fecha=YYYY-MM-DD[&tipo=Frío|Caliente]
+//     Devuelve productos planificados del día con destinos dinámicos.
+app.get('/api/v2/planificacion/kds', async (req, res) => {
+  const fecha = req.query.fecha || getLocalISODate();
+  const tipo  = req.query.tipo  || null;
+  try {
+    let sqlMain = `
+      SELECT
+        p.id     AS producto_id,
+        p.plu,
+        p.nombre,
+        p.cuarto,
+        p.envase,
+        COALESCE(SUM(pdd.cantidad), 0) AS total_planificado,
+        COALESCE(pr.cantidad_real, 0)  AS total_producido,
+        pr.hora_inicio,
+        pr.hora_fin,
+        pr.id AS registro_id
+      FROM planificacion_diaria pd
+      JOIN productos p ON pd.producto_id = p.id
+      LEFT JOIN planificacion_destinos pdd ON pdd.planificacion_id = pd.id
+      LEFT JOIN produccion_real pr
+        ON pr.producto_id = pd.producto_id AND pr.fecha = pd.fecha
+      WHERE pd.fecha = ?`;
+
+    const params = [fecha];
+    if (tipo) { sqlMain += ` AND p.cuarto = ?`; params.push(tipo); }
+
+    sqlMain += `
+      GROUP BY p.id, p.plu, p.nombre, p.cuarto, p.envase,
+               pr.cantidad_real, pr.hora_inicio, pr.hora_fin, pr.id
+      HAVING COALESCE(SUM(pdd.cantidad), 0) > 0
+      ORDER BY p.nombre`;
+
+    const [rows] = await pool2.execute(sqlMain, params);
+    if (!rows.length) return res.json([]);
+
+    // Desglose de cantidades por destino para cada producto
+    const productoIds = rows.map(r => r.producto_id);
+    const [destRows] = await pool2.execute(
+      `SELECT
+         pd.producto_id,
+         d.id   AS destino_id,
+         d.nombre AS destino_nombre,
+         pdd.cantidad
+       FROM planificacion_diaria pd
+       JOIN planificacion_destinos pdd ON pdd.planificacion_id = pd.id
+       JOIN destinos d ON d.id = pdd.destino_id
+       WHERE pd.fecha = ?
+         AND pd.producto_id IN (${productoIds.map(() => '?').join(',')})
+         AND pdd.cantidad > 0
+       ORDER BY d.id`,
+      [fecha, ...productoIds]
+    );
+
+    // Merge: adjunta array de destinos a cada producto
+    const result = rows.map(row => ({
+      ...row,
+      destinos: destRows
+        .filter(d => d.producto_id === row.producto_id)
+        .map(d => ({ destino_id: d.destino_id, nombre: d.destino_nombre, cantidad: d.cantidad }))
+    }));
+
+    res.json(result);
+  } catch (e) { err500(res, e); }
+});
+
+// POST /api/v2/planificacion/batch
+//      Body: { fecha, items: [{ producto_id, destinos: [{ destino_id, cantidad }] }] }
+app.post('/api/v2/planificacion/batch', requireAdmin, async (req, res) => {
+  const { fecha, items } = req.body;
+  if (!fecha || !Array.isArray(items) || !items.length)
+    return res.status(400).json({ error: 'fecha e items[] son requeridos.' });
+
+  const conn = await pool2.getConnection();
+  try {
+    await conn.beginTransaction();
+    let guardados = 0;
+    for (const item of items) {
+      const { producto_id, destinos } = item;
+      if (!producto_id || !Array.isArray(destinos)) continue;
+
+      const totalCantidad = destinos.reduce((s, d) => s + (Number(d.cantidad) || 0), 0);
+      if (totalCantidad === 0) continue;
+
+      // Upsert cabecera de planificacion
+      await conn.execute(
+        `INSERT INTO planificacion_diaria (fecha, producto_id)
+         VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+        [fecha, producto_id]
+      );
+      const [[{ planId }]] = await conn.execute(
+        'SELECT id AS planId FROM planificacion_diaria WHERE fecha = ? AND producto_id = ?',
+        [fecha, producto_id]
+      );
+
+      // Upsert detalle por destino
+      for (const d of destinos) {
+        const cant = Number(d.cantidad) || 0;
+        await conn.execute(
+          `INSERT INTO planificacion_destinos (planificacion_id, destino_id, cantidad)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE cantidad = VALUES(cantidad)`,
+          [planId, d.destino_id, cant]
+        );
+      }
+      guardados++;
+    }
+    await conn.commit();
+    res.json({ success: true, guardados });
+  } catch (e) {
+    await conn.rollback();
+    err500(res, e);
+  } finally {
+    conn.release();
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  API v2 – PRODUCCIÓN
+// ══════════════════════════════════════════════════════════════
+
+// POST /api/v2/produccion/iniciar
+//      Registra la hora de inicio de preparación de un producto.
+app.post('/api/v2/produccion/iniciar', async (req, res) => {
+  const { fecha, producto_id } = req.body;
+  if (!fecha || !producto_id)
+    return res.status(400).json({ error: 'fecha y producto_id son requeridos.' });
+
+  const horaActual = dayjs().tz('America/Santiago').format('HH:mm:ss');
+  try {
+    const [existing] = await pool2.execute(
+      'SELECT id, hora_inicio FROM produccion_real WHERE fecha = ? AND producto_id = ?',
+      [fecha, producto_id]
+    );
+    if (existing.length > 0) {
+      if (!existing[0].hora_inicio) {
+        await pool2.execute(
+          'UPDATE produccion_real SET hora_inicio = ? WHERE fecha = ? AND producto_id = ?',
+          [horaActual, fecha, producto_id]
+        );
+        return res.json({ success: true, mensaje: 'Preparación iniciada.' });
+      }
+      return res.json({ success: true, mensaje: 'Ya estaba iniciado.' });
+    }
+    await pool2.execute(
+      `INSERT INTO produccion_real
+         (fecha, producto_id, hora_inicio, cantidad_real, no_producido)
+       VALUES (?, ?, ?, 0, 0)`,
+      [fecha, producto_id, horaActual]
+    );
+    res.json({ success: true, mensaje: 'Preparación iniciada.' });
+  } catch (e) { err500(res, e); }
+});
+
+// PUT /api/v2/produccion/finalizar
+//     Guarda cantidad real, cocinero, hora_fin y desglose por destino.
+//     Body: { fecha, producto_id, cantidad_real, no_producido,
+//             cocinero_id, comentarios, destinos: [{destino_id, cantidad}] }
+app.put('/api/v2/produccion/finalizar', async (req, res) => {
+  const { fecha, producto_id, cantidad_real, no_producido,
+          cocinero_id, comentarios, destinos } = req.body;
+  if (!fecha || !producto_id)
+    return res.status(400).json({ error: 'fecha y producto_id son requeridos.' });
+
+  const real        = Number(cantidad_real)  || 0;
+  const noProducido = Number(no_producido)   || 0;
+  const horaActual  = dayjs().tz('America/Santiago').format('HH:mm:ss');
+
+  const conn = await pool2.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Upsert produccion_real principal
+    await conn.execute(
+      `INSERT INTO produccion_real
+         (fecha, producto_id, cantidad_real, no_producido,
+          cocinero_id, comentarios, hora_fin)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         cantidad_real = VALUES(cantidad_real),
+         no_producido  = VALUES(no_producido),
+         cocinero_id   = VALUES(cocinero_id),
+         comentarios   = VALUES(comentarios),
+         hora_fin      = VALUES(hora_fin)`,
+      [fecha, producto_id, real, noProducido,
+       cocinero_id || null, (comentarios || '').trim(), horaActual]
+    );
+
+    // Obtener ID del registro recién guardado
+    const [[{ prod_id }]] = await conn.execute(
+      'SELECT id AS prod_id FROM produccion_real WHERE fecha = ? AND producto_id = ?',
+      [fecha, producto_id]
+    );
+
+    // Insertar/actualizar desglose por destino
+    if (Array.isArray(destinos)) {
+      for (const d of destinos) {
+        await conn.execute(
+          `INSERT INTO produccion_destinos (produccion_id, destino_id, cantidad)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE cantidad = VALUES(cantidad)`,
+          [prod_id, d.destino_id, Number(d.cantidad) || 0]
+        );
+      }
+    }
+
+    await conn.commit();
+    res.json({ success: true, mensaje: 'Producción finalizada.' });
+  } catch (e) {
+    await conn.rollback();
+    err500(res, e);
+  } finally {
+    conn.release();
+  }
 });
 
 // ══════════════════════════════════════════════════════════════

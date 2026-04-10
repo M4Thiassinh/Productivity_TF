@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📋 Planificación Diaria v2</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.2s ease both; }
+    .input-dest {
+      width: 100%; text-align: center;
+      background: #1f2937; border: 1px solid #374151;
+      border-radius: 0.625rem; padding: 0.45rem 0.25rem;
+      color: white; font-weight: 700; font-size: 0.95rem;
+      outline: none; transition: border-color 0.15s;
+    }
+    .input-dest:focus { border-color: #6366f1; }
+  </style>
+</head>
+<body class="bg-gray-950 min-h-screen text-white p-4 md:p-6">
+
+  <!-- ── HEADER ── -->
+  <header class="flex flex-wrap items-center gap-4 mb-6 max-w-screen-2xl mx-auto">
+    <a href="/" class="flex items-center justify-center w-10 h-10 rounded-xl
+                        bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white
+                        transition-colors text-xl font-bold shrink-0">&#8592;</a>
+    <div class="flex-1 min-w-0">
+      <h1 class="text-3xl md:text-4xl font-black">📋 Planificación Diaria <span class="text-indigo-400 text-2xl">v2</span></h1>
+      <p class="text-gray-500 text-sm mt-0.5" id="fecha-display"></p>
+    </div>
+    <div class="flex items-center gap-3 shrink-0">
+      <label class="text-gray-500 text-xs font-semibold uppercase tracking-wider">Fecha</label>
+      <input type="date" id="input-fecha"
+             class="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2
+                    text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors" />
+    </div>
+  </header>
+
+  <div class="max-w-screen-2xl mx-auto space-y-5">
+
+    <!-- INFO BANNER -->
+    <div id="info-banner" class="bg-indigo-950 border border-indigo-800 rounded-2xl px-5 py-3 flex items-start gap-3">
+      <span class="text-lg shrink-0 mt-0.5">💡</span>
+      <p class="text-indigo-200 text-sm leading-relaxed" id="info-text">
+        Cargando destinos desde kitchen_db2…
+      </p>
+    </div>
+
+    <!-- TABLA BATCH -->
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+      <!-- Cabecera dinámica -->
+      <div id="tabla-header"
+           class="px-4 py-3 bg-gray-800/50 border-b border-gray-700
+                  text-xs font-bold uppercase tracking-wider text-gray-500">
+        <div class="py-4 text-center text-gray-600 animate-pulse">⏳ Cargando columnas…</div>
+      </div>
+      <!-- Cuerpo -->
+      <div id="tabla-cuerpo">
+        <div class="py-12 text-center text-gray-600 animate-pulse">⏳ Cargando productos…</div>
+      </div>
+    </div>
+
+    <!-- RESUMEN DINÁMICO -->
+    <div id="resumen-box" class="hidden bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4">
+      <div class="flex flex-wrap gap-6 items-center">
+        <div>
+          <span class="text-gray-500 text-xs uppercase tracking-wider block">Productos planificados</span>
+          <span id="resumen-count" class="text-3xl font-black text-indigo-400">0</span>
+        </div>
+        <div id="resumen-destinos" class="flex flex-wrap gap-6"></div>
+        <div>
+          <span class="text-gray-500 text-xs uppercase tracking-wider block">Total General</span>
+          <span id="resumen-total" class="text-3xl font-black text-green-400">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTÓN GUARDAR -->
+    <button id="btn-guardar" onclick="guardarBatch()" disabled
+            class="w-full bg-indigo-900 text-gray-400 font-black py-5 rounded-2xl text-2xl
+                   transition-all tracking-widest cursor-not-allowed opacity-50 shadow-xl">
+      💾 GUARDAR PLANIFICACIÓN DEL DÍA
+    </button>
+    <div id="toast-guardar" class="hidden text-center py-3 px-5 rounded-xl font-semibold text-base"></div>
+
+  </div>
+
+  <script>
+    // ══════════════════════════════════════════════════════════
+    //  ESTADO GLOBAL
+    // ══════════════════════════════════════════════════════════
+    const getLocalISODate = () => {
+      const now = new Date();
+      return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    };
+    const today = getLocalISODate();
+    const fechaInput = document.getElementById('input-fecha');
+    fechaInput.value = today;
+
+    document.getElementById('fecha-display').textContent =
+      new Date().toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    fechaInput.addEventListener('change', () => cargarTabla(fechaInput.value));
+
+    // Colores rotatorios para las columnas de destinos
+    const DEST_COLORS = [
+      { ring: '#a855f7', label: 'text-purple-400',  focus: 'border-purple-500',  badge: 'bg-purple-900/50 text-purple-400' },
+      { ring: '#38bdf8', label: 'text-sky-400',     focus: 'border-sky-500',     badge: 'bg-sky-900/50 text-sky-400' },
+      { ring: '#fbbf24', label: 'text-amber-400',   focus: 'border-amber-500',   badge: 'bg-amber-900/50 text-amber-400' },
+      { ring: '#34d399', label: 'text-emerald-400', focus: 'border-emerald-500', badge: 'bg-emerald-900/50 text-emerald-400' },
+      { ring: '#f87171', label: 'text-red-400',     focus: 'border-red-500',     badge: 'bg-red-900/50 text-red-400' },
+      { ring: '#fb923c', label: 'text-orange-400',  focus: 'border-orange-500',  badge: 'bg-orange-900/50 text-orange-400' },
+    ];
+
+    let destinos  = [];
+    let productos = [];
+    let planMap   = {};   // { producto_id: { destino_id: cantidad } }
+
+    // ══════════════════════════════════════════════════════════
+    //  TOAST
+    // ══════════════════════════════════════════════════════════
+    function toast(id, msg, tipo) {
+      const el = document.getElementById(id);
+      const ok  = 'text-center py-3 px-5 rounded-xl font-semibold text-base bg-green-900 text-green-300 border border-green-700';
+      const err = 'text-center py-3 px-5 rounded-xl font-semibold text-base bg-red-900 text-red-300 border border-red-700';
+      el.className = tipo === 'ok' ? ok : err;
+      el.textContent = msg;
+      clearTimeout(el._t);
+      el._t = setTimeout(() => { el.className = 'hidden'; }, 4500);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  RECALCULAR TOTALES Y HABILITAR BOTÓN
+    // ══════════════════════════════════════════════════════════
+    function onInputChange() {
+      let count = 0, grandTotal = 0;
+      const sumPorDestino = {};
+      destinos.forEach(d => { sumPorDestino[d.id] = 0; });
+
+      document.querySelectorAll('[data-pid]').forEach(row => {
+        const pid = Number(row.dataset.pid);
+        let rowTotal = 0;
+        destinos.forEach(d => {
+          const v = parseInt(document.getElementById(`d${d.id}-p${pid}`)?.value) || 0;
+          rowTotal += v;
+          sumPorDestino[d.id] += v;
+        });
+        const celda = document.getElementById('total-p' + pid);
+        if (celda) {
+          celda.textContent = rowTotal > 0 ? rowTotal : '—';
+          celda.className   = rowTotal > 0
+            ? 'text-center font-black text-xl text-green-400'
+            : 'text-center text-gray-700 text-sm';
+        }
+        if (rowTotal > 0) { count++; grandTotal += rowTotal; }
+      });
+
+      // Resumen
+      document.getElementById('resumen-count').textContent = count;
+      document.getElementById('resumen-total').textContent = grandTotal;
+      const resDest = document.getElementById('resumen-destinos');
+      resDest.innerHTML = destinos.map((d, i) => {
+        const c = DEST_COLORS[i % DEST_COLORS.length];
+        return `<div>
+          <span class="text-gray-500 text-xs uppercase tracking-wider block">Total ${d.nombre}</span>
+          <span class="text-3xl font-black ${c.label}">${sumPorDestino[d.id]}</span>
+        </div>`;
+      }).join('');
+      document.getElementById('resumen-box').classList.toggle('hidden', count === 0);
+
+      const btn = document.getElementById('btn-guardar');
+      if (count > 0) {
+        btn.disabled  = false;
+        btn.className = 'w-full bg-indigo-700 hover:bg-indigo-600 active:bg-indigo-800 text-white font-black py-5 rounded-2xl text-2xl transition-all tracking-widest cursor-pointer shadow-xl shadow-indigo-900/40';
+      } else {
+        btn.disabled  = true;
+        btn.className = 'w-full bg-indigo-900 text-gray-400 font-black py-5 rounded-2xl text-2xl transition-all tracking-widest cursor-not-allowed opacity-50 shadow-xl';
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  RENDER CABECERA DINÁMICA
+    // ══════════════════════════════════════════════════════════
+    function renderHeader() {
+      const destCols = destinos.map((d, i) => {
+        const c = DEST_COLORS[i % DEST_COLORS.length];
+        return `<span class="text-center ${c.label}">${d.nombre}</span>`;
+      }).join('');
+
+      // Grid: icono(2.5rem) | PLU(5rem) | Nombre(1fr) | destinos(6rem cada uno) | Total(5.5rem)
+      const cols = `2.5rem 5rem 1fr ${destinos.map(() => '6rem').join(' ')} 5.5rem`;
+      document.getElementById('tabla-header').innerHTML = `
+        <div style="display:grid; grid-template-columns:${cols}; align-items:center;"
+             class="px-4 py-3 bg-gray-800/50 border-b border-gray-700
+                    text-xs font-bold uppercase tracking-wider text-gray-500">
+          <span></span>
+          <span>PLU</span>
+          <span>Producto</span>
+          ${destCols}
+          <span class="text-center text-green-400">Total</span>
+        </div>`;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  RENDER FILAS DE PRODUCTOS
+    // ══════════════════════════════════════════════════════════
+    function filaProducto(p) {
+      const cols = `2.5rem 5rem 1fr ${destinos.map(() => '6rem').join(' ')} 5.5rem`;
+      const icon = p.cuarto === 'Caliente' ? '🔥' : '❄️';
+
+      const prevRow = planMap[p.id] || {};
+      let rowTotal = 0;
+      const destInputs = destinos.map((d, i) => {
+        const c   = DEST_COLORS[i % DEST_COLORS.length];
+        const val = prevRow[d.id] || 0;
+        rowTotal += val;
+        return `<div class="px-1">
+          <input type="number" min="0" id="d${d.id}-p${p.id}"
+                 value="${val > 0 ? val : ''}" placeholder="0"
+                 oninput="onInputChange()"
+                 class="input-dest"
+                 onfocus="this.style.borderColor='${c.ring}'"
+                 onblur="this.style.borderColor='#374151'" />
+        </div>`;
+      }).join('');
+
+      return `
+        <div data-pid="${p.id}"
+             style="display:grid; grid-template-columns:${cols}; align-items:center;"
+             class="px-4 py-2.5 border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors">
+          <span class="text-lg" title="${p.cuarto}">${icon}</span>
+          <span class="font-mono text-xs text-gray-600">${p.plu}</span>
+          <span class="text-white font-semibold text-sm pr-2 truncate" title="${p.nombre}">${p.nombre}</span>
+          ${destInputs}
+          <div class="flex items-center justify-center">
+            <span id="total-p${p.id}"
+                  class="${rowTotal > 0 ? 'text-center font-black text-xl text-green-400' : 'text-center text-gray-700 text-sm'}">
+              ${rowTotal > 0 ? rowTotal : '—'}
+            </span>
+          </div>
+        </div>`;
+    }
+
+    function renderTabla() {
+      const calientes = productos.filter(p => p.cuarto === 'Caliente');
+      const frios     = productos.filter(p => p.cuarto === 'Frío');
+
+      let html = '';
+      if (calientes.length) {
+        html += `<div class="px-4 py-2.5 bg-orange-950/30 border-b border-orange-900/40 flex items-center gap-2">
+          <span class="text-orange-400 font-black text-sm uppercase tracking-widest">🔥 Cuarto Caliente</span>
+          <span class="bg-orange-900/50 text-orange-400 text-xs font-bold px-2 py-0.5 rounded-full">${calientes.length} productos</span>
+        </div>${calientes.map(filaProducto).join('')}`;
+      }
+      if (frios.length) {
+        html += `<div class="px-4 py-2.5 bg-blue-950/30 border-b border-blue-900/40 flex items-center gap-2">
+          <span class="text-blue-400 font-black text-sm uppercase tracking-widest">❄️ Cuarto Frío</span>
+          <span class="bg-blue-900/50 text-blue-400 text-xs font-bold px-2 py-0.5 rounded-full">${frios.length} productos</span>
+        </div>${frios.map(filaProducto).join('')}`;
+      }
+
+      document.getElementById('tabla-cuerpo').innerHTML = html ||
+        '<div class="py-12 text-center text-gray-600">Sin productos en kitchen_db2. Usa el Panel Admin para agregarlos.</div>';
+
+      onInputChange();
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  CARGAR PLANIFICACIÓN EXISTENTE
+    // ══════════════════════════════════════════════════════════
+    async function cargarPlanExistente(fecha) {
+      planMap = {};
+      try {
+        const res  = await fetch(`/api/v2/planificacion/kds?fecha=${fecha}`);
+        const data = await res.json();
+        data.forEach(item => {
+          planMap[item.producto_id] = {};
+          (item.destinos || []).forEach(d => {
+            planMap[item.producto_id][d.destino_id] = d.cantidad;
+          });
+        });
+      } catch { /* si falla, planMap queda vacío */ }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  CARGAR TODO
+    // ══════════════════════════════════════════════════════════
+    async function cargarTabla(fecha) {
+      document.getElementById('tabla-cuerpo').innerHTML =
+        '<div class="py-12 text-center text-gray-600 animate-pulse">⏳ Cargando…</div>';
+      document.getElementById('resumen-box').classList.add('hidden');
+
+      try {
+        await cargarPlanExistente(fecha);
+        renderTabla();
+      } catch (e) {
+        document.getElementById('tabla-cuerpo').innerHTML =
+          '<div class="py-12 text-center text-red-500">❌ Error al cargar datos.</div>';
+        console.error(e);
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  GUARDAR BATCH → /api/v2/planificacion/batch
+    // ══════════════════════════════════════════════════════════
+    async function guardarBatch() {
+      const fecha = fechaInput.value;
+      const items = [];
+
+      document.querySelectorAll('[data-pid]').forEach(row => {
+        const producto_id = Number(row.dataset.pid);
+        const destinosRow = destinos.map(d => ({
+          destino_id: d.id,
+          cantidad: parseInt(document.getElementById(`d${d.id}-p${producto_id}`)?.value) || 0
+        }));
+        const total = destinosRow.reduce((s, d) => s + d.cantidad, 0);
+        if (total > 0) items.push({ producto_id, destinos: destinosRow });
+      });
+
+      if (!items.length) { toast('toast-guardar', '⚠️ Ingresa al menos una cantidad.', 'err'); return; }
+
+      const btn = document.getElementById('btn-guardar');
+      btn.textContent = '⏳ Guardando…';
+      btn.disabled    = true;
+
+      try {
+        const res  = await fetch('/api/v2/planificacion/batch', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fecha, items })
+        });
+        const data = await res.json();
+        if (data.success) {
+          toast('toast-guardar', `✅ Planificación guardada — ${data.guardados} producto(s) en kitchen_db2.`, 'ok');
+          await cargarPlanExistente(fecha);
+          renderTabla();
+        } else {
+          toast('toast-guardar', '❌ Error: ' + (data.error || 'Error desconocido'), 'err');
+        }
+      } catch {
+        toast('toast-guardar', '❌ Error de conexión.', 'err');
+      }
+
+      btn.textContent = '💾 GUARDAR PLANIFICACIÓN DEL DÍA';
+      btn.disabled    = false;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  INICIALIZACIÓN
+    // ══════════════════════════════════════════════════════════
+    (async () => {
+      try {
+        // Cargar destinos y productos desde kitchen_db2 en paralelo
+        const [resD, resP] = await Promise.all([
+          fetch('/api/v2/destinos'),
+          fetch('/api/v2/productos')
+        ]);
+        destinos  = await resD.json();
+        productos = await resP.json();
+
+        if (!destinos.length) {
+          document.getElementById('info-banner').className =
+            'bg-red-950 border border-red-800 rounded-2xl px-5 py-3 flex items-start gap-3';
+          document.getElementById('info-text').textContent =
+            '⚠️ No hay destinos configurados en kitchen_db2. Ve al Panel Admin para crear destinos primero.';
+          document.getElementById('tabla-cuerpo').innerHTML =
+            '<div class="py-12 text-center text-red-500">Sin destinos — configura desde el Panel Admin.</div>';
+          return;
+        }
+
+        // Actualizar banner info con destinos reales
+        const nombresDestinos = destinos.map(d => `<strong class="text-white">${d.nombre}</strong>`).join(', ');
+        document.getElementById('info-text').innerHTML =
+          `Ingresa la cantidad para cada destino: ${nombresDestinos}. El <strong class="text-white">Total</strong> se calcula automáticamente. Solo se guardan filas con Total &gt; 0. Los datos se guardan en <span class="text-indigo-300 font-bold">kitchen_db2</span>.`;
+
+        renderHeader();
+        await cargarTabla(today);
+
+      } catch (e) {
+        document.getElementById('tabla-cuerpo').innerHTML =
+          '<div class="py-12 text-center text-red-500">❌ Error al conectar con kitchen_db2. ¿Está el servidor corriendo?</div>';
+        console.error(e);
+      }
+    })();
+  </script>
+</body>
+</html>
